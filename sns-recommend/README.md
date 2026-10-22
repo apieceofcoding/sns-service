@@ -1,5 +1,5 @@
 # SNS 추천 서비스
 
-FastAPI는 저장된 추천을 조회합니다. 별도 배치가 Outbox를 수집하고, worker가 추천을 생성해 Redis에 저장해요.
+FastAPI는 저장된 추천을 조회합니다. 별도 이벤트 워커가 Outbox를 수집하고, worker가 추천을 생성해 Redis에 저장해요.
 
 설치부터 단원별 실행과 모델 설정까지 [전체 실습 가이드](../README.md)에서 확인합니다.

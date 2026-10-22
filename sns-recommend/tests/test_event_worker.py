@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sns_recommend import batch
+from sns_recommend import event_worker
 
 
 def test_empty_batch_opens_no_event_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -18,16 +18,16 @@ def test_empty_batch_opens_no_event_transaction(monkeypatch: pytest.MonkeyPatch)
         yield conn
 
     accept = Mock()
-    monkeypatch.setattr(batch, "source_connection", source)
-    monkeypatch.setattr(batch, "accept_event", accept)
-    assert batch.poll_once() == {"delivered": 0}
+    monkeypatch.setattr(event_worker, "source_connection", source)
+    monkeypatch.setattr(event_worker, "accept_event", accept)
+    assert event_worker.poll_once() == {"delivered": 0}
     accept.assert_not_called()
 
 
 @pytest.mark.parametrize("size", [0, -1, 1001])
-def test_batch_rejects_unbounded_queries(size: int) -> None:
+def test_event_worker_rejects_unbounded_queries(size: int) -> None:
     with pytest.raises(ValueError):
-        batch.poll_once(size)
+        event_worker.poll_once(size)
 
 
 def test_retry_loop_survives_failure_and_restores_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -43,10 +43,10 @@ def test_retry_loop_survives_failure_and_restores_handlers(monkeypatch: pytest.M
     )
     previous = Mock()
     handlers = Mock(return_value=previous)
-    monkeypatch.setattr(batch, "StopEvent", lambda: stop)
-    monkeypatch.setattr(batch, "poll_once", consume)
-    monkeypatch.setattr(batch.signal, "signal", handlers)
-    batch.run_poller()
+    monkeypatch.setattr(event_worker, "StopEvent", lambda: stop)
+    monkeypatch.setattr(event_worker, "poll_once", consume)
+    monkeypatch.setattr(event_worker.signal, "signal", handlers)
+    event_worker.run_poller()
     assert [call.args[0] for call in stop.wait.call_args_list] == [3, 6, 3, 3]
     assert handlers.call_count == 4
     assert all(call.args[1] is previous for call in handlers.call_args_list[2:])

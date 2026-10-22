@@ -46,7 +46,7 @@ def run_poller() -> None:
                 if result["delivered"]:
                     logger.info("delivered=%s", result["delivered"])
             except Exception:
-                logger.exception("Outbox batch failed; retrying in %ss", delay)
+                logger.exception("Outbox event worker failed; retrying in %ss", delay)
                 stop.wait(delay)
                 delay = min(delay * 2, 30)
             else:
@@ -59,7 +59,7 @@ def run_poller() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Consume the SNS Outbox independently of FastAPI")
-    parser.add_argument("--once", action="store_true", help="process one batch and exit")
+    parser.add_argument("--once", action="store_true", help="process pending events once and exit")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     if args.once:

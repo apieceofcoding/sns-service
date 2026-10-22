@@ -474,8 +474,8 @@ def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -
     assert ids == set(range(7, 19))
 
 
-def test_batch_delivers_without_fastapi(infra: None) -> None:
-    from sns_recommend.batch import poll_once
+def test_event_worker_delivers_without_fastapi(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
 
     change_post(1001, "Python batch")
     assert poll_once() == {"delivered": 1}
@@ -488,13 +488,13 @@ def test_batch_delivers_without_fastapi(infra: None) -> None:
         assert row is not None and row["delivered_at"] is not None
 
 
-def test_batch_replays_after_source_ack_transaction_rolls_back(
+def test_event_worker_replays_after_source_ack_transaction_rolls_back(
     infra: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from collections.abc import Iterator
     from contextlib import contextmanager
 
-    from sns_recommend import batch
+    from sns_recommend import event_worker
 
     change_post(1001, "Python replay")
 
@@ -505,20 +505,20 @@ def test_batch_replays_after_source_ack_transaction_rolls_back(
             raise RuntimeError("source acknowledgement interrupted")
 
     with monkeypatch.context() as patch:
-        patch.setattr(batch, "source_connection", interrupted_source)
+        patch.setattr(event_worker, "source_connection", interrupted_source)
         with pytest.raises(RuntimeError):
-            batch.poll_once()
+            event_worker.poll_once()
     with source_connection() as conn:
         row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
         assert row is not None and row["delivered_at"] is None
-    assert batch.poll_once() == {"delivered": 1}
+    assert event_worker.poll_once() == {"delivered": 1}
     with connection() as conn:
         assert count(conn, "events") == 1
         assert count(conn, "jobs") == 1
 
 
-def test_batch_skips_events_locked_by_another_consumer(infra: None) -> None:
-    from sns_recommend.batch import poll_once
+def test_event_worker_skips_events_locked_by_another_consumer(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
 
     change_post(1001, "Python locked")
     change_post(1002, "Python free")
@@ -530,8 +530,8 @@ def test_batch_skips_events_locked_by_another_consumer(infra: None) -> None:
         assert count(conn, "events") == 2
 
 
-def test_batch_limits_work_per_poll(infra: None) -> None:
-    from sns_recommend.batch import poll_once
+def test_event_worker_limits_work_per_poll(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
 
     change_post(1001, "Python first")
     change_post(1002, "Python second")
@@ -540,19 +540,19 @@ def test_batch_limits_work_per_poll(infra: None) -> None:
     assert poll_once(1) == {"delivered": 0}
 
 
-def test_batch_keeps_outbox_pending_when_event_processing_fails(
+def test_event_worker_keeps_outbox_pending_when_event_processing_fails(
     infra: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from sns_recommend import batch
+    from sns_recommend import event_worker
 
     change_post(1001, "Python failed")
 
     def unavailable(event: Event) -> None:
         raise RuntimeError("recommend database unavailable")
 
-    monkeypatch.setattr(batch, "accept_event", unavailable)
+    monkeypatch.setattr(event_worker, "accept_event", unavailable)
     with pytest.raises(RuntimeError):
-        batch.poll_once()
+        event_worker.poll_once()
     with source_connection() as conn:
         row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
         assert row is not None and row["delivered_at"] is None
