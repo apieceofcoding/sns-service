@@ -49,7 +49,7 @@ def retrieve_candidates(user_id, k=30, as_of=None):
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     reference = as_of or datetime.now(timezone.utc)
-    # Posts come from the SNS database. The recommendation database adds similarity by ID.
+    # Posts come from the SNS database. The recommend database adds similarity by ID.
     posts = source.recent_posts(user_id, reference)
     interests = source.interests(user_id)
     with connection() as conn:

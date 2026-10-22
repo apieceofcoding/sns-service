@@ -10,7 +10,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: snspassword
       SPRING_DATA_REDIS_HOST: redis
       RUSTFS_ENDPOINT: http://rustfs:9000
-      RECOMMENDATION_BASE_URL: ${RECOMMENDATION_BASE_URL:-http://host.docker.internal:8001}
+      RECOMMEND_FEED_BASE_URL: ${RECOMMEND_FEED_BASE_URL:-http://host.docker.internal:8001}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

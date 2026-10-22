@@ -10,8 +10,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestControllerAdvice(assignableTypes = RecommendationController.class)
-public class RecommendationExceptionHandler {
+@RestControllerAdvice(assignableTypes = RecommendController.class)
+public class RecommendExceptionHandler {
 
     @ExceptionHandler({ResponseStatusException.class, RestClientException.class})
     public ResponseEntity<ProblemDetail> handle(Exception exception) {
