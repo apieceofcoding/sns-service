@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.apiece.springboot_sns_sample.domain.post.Post;
 import lombok.RequiredArgsConstructor;
@@ -19,19 +19,19 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class RecommendationService {
+public class RecommendFeedService {
 
-    private final RecommendationClient client;
-    private final RecommendationRepository repository;
+    private final RecommendFeedClient client;
+    private final RecommendRepository repository;
 
-    public RecommendationPage get(long userId, int limit, String cursor) {
+    public RecommendPage get(long userId, int limit, String cursor) {
         if (limit < 1 || limit > 50 || (cursor != null && (cursor.isBlank() || cursor.length() > 2048))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "잘못된 조회 조건입니다");
         }
         if (cursor != null && cursor.startsWith("latest:")) {
             return latest(userId, limit, cursor);
         }
-        RecommendationClient.Feed feed;
+        RecommendFeedClient.Feed feed;
         try {
             feed = client.get(userId, limit, cursor);
         } catch (RestClientException ex) {
@@ -53,10 +53,10 @@ public class RecommendationService {
         var posts = feed.postIds().isEmpty() ? List.<Post>of() : repository.visible(feed.postIds());
         var byId = posts.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
         var ordered = feed.postIds().stream().distinct().map(byId::get).filter(Objects::nonNull).toList();
-        return new RecommendationPage(ordered, feed.nextCursor(), "recommend");
+        return new RecommendPage(ordered, feed.nextCursor(), "recommend");
     }
 
-    private RecommendationPage latest(long userId, int limit, String cursor) {
+    private RecommendPage latest(long userId, int limit, String cursor) {
         LocalDateTime before = LocalDateTime.of(9999, 12, 31, 23, 59, 59);
         long id = Long.MAX_VALUE;
         if (cursor != null) {
@@ -82,6 +82,6 @@ public class RecommendationService {
             next = "latest:" + Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(value.getBytes(StandardCharsets.UTF_8));
         }
-        return new RecommendationPage(selected, next, "latest");
+        return new RecommendPage(selected, next, "latest");
     }
 }

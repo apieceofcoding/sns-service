@@ -31,7 +31,7 @@ def change_post(post_id: int, body: str, author_id: int = 1) -> dict[str, str | 
             event_id=uuid4(), kind="post.updated", post_id=post_id, version=row["content_version"]
         )
         conn.execute(
-            "INSERT INTO recommendation_outbox(id,event) VALUES (%s,%s)",
+            "INSERT INTO recommend_outbox(id,event) VALUES (%s,%s)",
             (event.event_id, Jsonb(event.model_dump(mode="json"))),
         )
     return {"event_id": str(event.event_id), "version": row["content_version"]}
@@ -41,7 +41,7 @@ def relay(url: str = "http://localhost:8001") -> dict[str, int]:
     count = 0
     with source_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM recommendation_outbox WHERE delivered_at IS NULL ORDER BY created_at"
+            "SELECT * FROM recommend_outbox WHERE delivered_at IS NULL ORDER BY created_at"
         ).fetchall()
     for row in rows:
         response = httpx.post(
@@ -53,7 +53,7 @@ def relay(url: str = "http://localhost:8001") -> dict[str, int]:
         response.raise_for_status()
         with source_connection() as conn:
             conn.execute(
-                "UPDATE recommendation_outbox SET delivered_at=now() WHERE id=%s", (row["id"],)
+                "UPDATE recommend_outbox SET delivered_at=now() WHERE id=%s", (row["id"],)
             )
         count += 1
     return {"delivered": count}

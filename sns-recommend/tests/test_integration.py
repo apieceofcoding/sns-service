@@ -74,7 +74,7 @@ def test_failed_index_job_does_not_block_a_redelivered_event(infra: None) -> Non
     assert pending is not None and pending["n"] == 1
 
 
-def test_recommendation_database_keeps_no_copy_of_posts(infra: None) -> None:
+def test_recommend_database_keeps_no_copy_of_posts(infra: None) -> None:
     assert index_posts()["indexed"] == 240
     assert index_posts()["indexed"] == 0
     with connection() as conn:
@@ -101,7 +101,7 @@ def test_source_outbox_commits_with_post(infra: None) -> None:
     with source_connection() as conn:
         post = conn.execute("SELECT content,content_version FROM posts WHERE id=1001").fetchone()
         events = conn.execute(
-            "SELECT event FROM recommendation_outbox ORDER BY created_at"
+            "SELECT event FROM recommend_outbox ORDER BY created_at"
         ).fetchall()
         # The app's next generated ID must not collide with the explicit demo ID.
         created = conn.execute(

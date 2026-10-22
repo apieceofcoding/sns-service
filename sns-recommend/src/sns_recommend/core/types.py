@@ -1,4 +1,4 @@
-"""Shared contracts for recommendation inputs, outputs and stored jobs."""
+"""Shared contracts for recommend inputs, outputs and stored jobs."""
 
 from datetime import datetime
 from typing import Any, Literal, NotRequired, TypedDict

@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-@RestControllerAdvice(assignableTypes = RecommendationController.class)
-public class RecommendationExceptionHandler {
+@RestControllerAdvice(assignableTypes = RecommendController.class)
+public class RecommendExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ProblemDetail> handle(ResponseStatusException exception) {

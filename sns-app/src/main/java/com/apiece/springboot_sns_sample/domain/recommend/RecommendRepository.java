@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.apiece.springboot_sns_sample.domain.post.Post;
 import org.springframework.data.domain.Pageable;
@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public interface RecommendationRepository extends Repository<Post, Long> {
+public interface RecommendRepository extends Repository<Post, Long> {
 
     @Query("""
             select p from Post p join fetch p.user

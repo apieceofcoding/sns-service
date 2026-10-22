@@ -21,7 +21,7 @@ def infra(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         pytest.skip("set RUN_INTEGRATION=1 for isolated local database tests")
     original = settings()
     name = "rec_test_" + uuid4().hex
-    # One throwaway database on each server: SNS originals and recommendation data.
+    # One throwaway database on each server: SNS originals and recommend data.
     servers = {
         "SOURCE_DATABASE_URL": original.source_database_url,
         "DATABASE_URL": original.database_url,

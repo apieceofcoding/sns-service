@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.apiece.springboot_sns_sample.domain.post.Post;
 import com.apiece.springboot_sns_sample.domain.user.User;
@@ -19,15 +19,15 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-class RecommendationServiceTest {
+class RecommendFeedServiceTest {
 
-    private final RecommendationClient client = mock(RecommendationClient.class);
-    private final RecommendationRepository repository = mock(RecommendationRepository.class);
-    private final RecommendationService service = new RecommendationService(client, repository);
+    private final RecommendFeedClient client = mock(RecommendFeedClient.class);
+    private final RecommendRepository repository = mock(RecommendRepository.class);
+    private final RecommendFeedService service = new RecommendFeedService(client, repository);
 
     @Test
     void restoresRankAndKeepsCursorWhenPostsDisappear() {
-        when(client.get(7, 3, null)).thenReturn(new RecommendationClient.Feed(true, List.of(3L, 1L, 2L), "next"));
+        when(client.get(7, 3, null)).thenReturn(new RecommendFeedClient.Feed(true, List.of(3L, 1L, 2L), "next"));
         Post one = post(1), three = post(3);
         when(repository.visible(List.of(3L, 1L, 2L))).thenReturn(List.of(one, three));
 
@@ -60,14 +60,14 @@ class RecommendationServiceTest {
 
     @Test
     void notReadyFirstPageFallsBack() {
-        when(client.get(7, 20, null)).thenReturn(new RecommendationClient.Feed(false, List.of(), null));
+        when(client.get(7, 20, null)).thenReturn(new RecommendFeedClient.Feed(false, List.of(), null));
         when(repository.latest(any(), anyLong(), any())).thenReturn(List.of());
         assertThat(service.get(7, 20, null).mode()).isEqualTo("latest");
     }
 
     @Test
     void readyEmptySnapshotDoesNotFallBack() {
-        when(client.get(7, 20, null)).thenReturn(new RecommendationClient.Feed(true, List.of(), null));
+        when(client.get(7, 20, null)).thenReturn(new RecommendFeedClient.Feed(true, List.of(), null));
         assertThat(service.get(7, 20, null).mode()).isEqualTo("recommend");
         verifyNoInteractions(repository);
     }
@@ -85,7 +85,7 @@ class RecommendationServiceTest {
 
     @Test
     void notReadyContinuationExpires() {
-        when(client.get(7, 20, "cursor")).thenReturn(new RecommendationClient.Feed(false, List.of(), null));
+        when(client.get(7, 20, "cursor")).thenReturn(new RecommendFeedClient.Feed(false, List.of(), null));
         assertThatThrownBy(() -> service.get(7, 20, "cursor"))
                 .isInstanceOfSatisfying(ResponseStatusException.class,
                         ex -> assertThat(ex.getStatusCode().value()).isEqualTo(410));

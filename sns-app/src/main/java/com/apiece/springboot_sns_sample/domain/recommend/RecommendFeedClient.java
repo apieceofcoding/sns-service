@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -14,14 +14,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Component
-public class RecommendationClient {
+public class RecommendFeedClient {
 
     private final RestClient client;
 
-    public RecommendationClient(RestClient.Builder builder,
+    public RecommendFeedClient(RestClient.Builder builder,
                                 ClientHttpRequestFactoryBuilder<?> factory,
                                 HttpClientSettings settings,
-                                @Value("${recommendation.base-url}") String baseUrl) {
+                                @Value("${recommend.feed-base-url}") String baseUrl) {
         client = builder.baseUrl(baseUrl)
                 .requestFactory(factory.build(settings.withTimeouts(
                         Duration.ofMillis(500), Duration.ofSeconds(2))))
@@ -39,7 +39,7 @@ public class RecommendationClient {
         if (feed == null || feed.ready() == null || feed.postIds() == null
                 || feed.postIds().size() > limit
                 || feed.postIds().stream().anyMatch(id -> id == null || id <= 0)) {
-            throw new RestClientException("Invalid recommendation response");
+            throw new RestClientException("Invalid recommend response");
         }
         return feed;
     }
