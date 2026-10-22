@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from time import perf_counter
+from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict, overload
 
 from langchain_core.runnables import RunnableConfig
@@ -11,20 +10,31 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from .config import settings
+
 type GraphResult = dict[str, Any]
 type EventRecord = dict[str, Any]
 type PausedResult = dict[str, Any]
 type RankingInput = dict[str, Any]
 type RankingResult = dict[str, Any]
-from .ranking import prepare_inputs
-from .ranking import rerank_candidates
+from .ranking import prepare_inputs, rerank_candidates
+
 
 def ranking_strategy(mode: str) -> str:
-    return {"fixture":"fixture_llm","replay":"replay_llm"}.get(mode,"llm")
-from .ranking import diversify, validate_ranking
-from .feed import publish
-from .event_queue import allocate_generation, claim, current_generation, enqueue, finish, renew, heartbeat
+    return {"fixture": "fixture_llm", "replay": "replay_llm"}.get(mode, "llm")
+
+
 from .db import connection, source_connection
+from .event_queue import (
+    allocate_generation,
+    claim,
+    current_generation,
+    enqueue,
+    finish,
+    heartbeat,
+    renew,
+)
+from .feed import publish
+from .ranking import diversify, validate_ranking
 
 GRAPH_VERSION = "sns-feed-behavior-v3"
 
@@ -47,7 +57,7 @@ class FeedState(TypedDict, total=False):
 
 
 def guard(state: FeedState) -> None:
-    renew({"id":state["event_id"],"claim_id":state["claim_id"]})
+    renew({"id": state["event_id"], "claim_id": state["claim_id"]})
 
 
 def make_graph(
@@ -97,17 +107,31 @@ def make_graph(
     def publish_feed(state: FeedState) -> FeedState:
         guard(state)
         with source_connection() as original:
-            event = original.execute("SELECT * FROM recommend_events WHERE id=%s FOR UPDATE",(state["event_id"],)).fetchone()
-            if (event is None or str(event["claim_id"])!=state["claim_id"]
-                or event["processed_at"] is not None or event["locked_until"]<=datetime.now(UTC)):
-                return {"published":False}
+            event = original.execute(
+                "SELECT * FROM recommend_events WHERE id=%s FOR UPDATE", (state["event_id"],)
+            ).fetchone()
+            if (
+                event is None
+                or str(event["claim_id"]) != state["claim_id"]
+                or event["processed_at"] is not None
+                or event["locked_until"] <= datetime.now(UTC)
+            ):
+                return {"published": False}
             with connection() as conn:
-                if (current_generation(conn,state["user_id"])!=state["generation"]
-                    or datetime.now(UTC).timestamp()-state["created_at"]>settings().snapshot_ttl):
-                    return {"published":False}
-                published=publish(state["user_id"],state["ordered"],state["strategy"],
-                                  state["generation"],state["snapshot_id"],state["created_at"])
-        return {"published":published}
+                if (
+                    current_generation(conn, state["user_id"]) != state["generation"]
+                    or datetime.now(UTC).timestamp() - state["created_at"] > settings().snapshot_ttl
+                ):
+                    return {"published": False}
+                published = publish(
+                    state["user_id"],
+                    state["ordered"],
+                    state["strategy"],
+                    state["generation"],
+                    state["snapshot_id"],
+                    state["created_at"],
+                )
+        return {"published": published}
 
     builder = StateGraph(FeedState)
     for name, node in [
@@ -132,6 +156,7 @@ def make_graph(
 @overload
 def run_graph(event: EventRecord, pause: Literal[False] = False) -> GraphResult: ...
 
+
 @overload
 def run_graph(event: EventRecord, pause: bool) -> GraphResult | PausedResult: ...
 
@@ -139,49 +164,64 @@ def run_graph(event: EventRecord, pause: bool) -> GraphResult | PausedResult: ..
 def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedResult:
     if event["user_id"] is None:
         raise ValueError("recommend.requested requires user_id")
-    started=perf_counter()
-    guard({"event_id":str(event["id"]),"claim_id":str(event["claim_id"])})
+    guard({"event_id": str(event["id"]), "claim_id": str(event["claim_id"])})
     with PostgresSaver.from_conn_string(settings().database_url) as saver:
         saver.setup()
-        graph=make_graph(saver,pause)
-        config: RunnableConfig={"configurable":{"thread_id":"behavior:"+str(event["id"])}}
-        saved=graph.get_state(config)
+        graph = make_graph(saver, pause)
+        config: RunnableConfig = {"configurable": {"thread_id": "behavior:" + str(event["id"])}}
+        saved = graph.get_state(config)
         if saved.values:
-            if saved.values["graph_version"]!=GRAPH_VERSION:
+            if saved.values["graph_version"] != GRAPH_VERSION:
                 raise ValueError("unsupported graph version")
-            graph.update_state(config,{"claim_id":str(event["claim_id"])},as_node=None)
-            result=graph.invoke(None,config)
+            graph.update_state(config, {"claim_id": str(event["claim_id"])}, as_node=None)
+            result = graph.invoke(None, config)
         else:
             with connection() as conn:
-                generation=allocate_generation(conn,event["user_id"])
-            result=graph.invoke({"user_id":event["user_id"],"event_id":str(event["id"]),
-                "claim_id":str(event["claim_id"]),"generation":generation,"snapshot_id":str(event["id"]),
-                "created_at":event["created_at"].timestamp(),"graph_version":GRAPH_VERSION},config)
+                generation = allocate_generation(conn, event["user_id"])
+            result = graph.invoke(
+                {
+                    "user_id": event["user_id"],
+                    "event_id": str(event["id"]),
+                    "claim_id": str(event["claim_id"]),
+                    "generation": generation,
+                    "snapshot_id": str(event["id"]),
+                    "created_at": event["created_at"].timestamp(),
+                    "graph_version": GRAPH_VERSION,
+                },
+                config,
+            )
         if graph.get_state(config).next:
             with source_connection() as conn:
-                conn.execute("UPDATE recommend_events SET locked_until=now() WHERE id=%s AND claim_id=%s",
-                             (event["id"],event["claim_id"]))
-            return {"paused":True,"event_id":str(event["id"]),"next":"validate"}
+                conn.execute(
+                    "UPDATE recommend_events SET locked_until=now() WHERE id=%s AND claim_id=%s",
+                    (event["id"], event["claim_id"]),
+                )
+            return {"paused": True, "event_id": str(event["id"]), "next": "validate"}
     if not finish(event):
         raise RuntimeError("event lease lost")
-    return {"event_id":str(event["id"]),"strategy":result["strategy"],
-            "post_ids":result["ordered"],"published":result.get("published",False)}
+    return {
+        "event_id": str(event["id"]),
+        "strategy": result["strategy"],
+        "post_ids": result["ordered"],
+        "published": result.get("published", False),
+    }
 
 
 @overload
 def start_graph(user_id: int, pause: Literal[False] = False) -> GraphResult: ...
+
 
 @overload
 def start_graph(user_id: int, pause: bool) -> GraphResult | PausedResult: ...
 
 
 def start_graph(user_id: int, pause: bool = False) -> GraphResult | PausedResult:
-    event_id=enqueue("recommend.requested",user_id)
-    event=claim(("recommend.requested",),event_id=event_id)
+    event_id = enqueue("recommend.requested", user_id)
+    event = claim(("recommend.requested",), event_id=event_id)
     if event is None:
         raise RuntimeError("event already owned by a worker")
     if pause:
-        return run_graph(event,pause)
+        return run_graph(event, pause)
     with heartbeat(event):
-        result=run_graph(event)
+        result = run_graph(event)
     return result
