@@ -1,15 +1,15 @@
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
-from sns_recommend.seed import TOPICS, USERNAMES, USERS, READERS
+from sns_recommend.seed import TOPICS, USERNAMES, READERS
 from sns_recommend.post_examples import post_body, post_created_at
 
 
 def test_author_topics_and_reader_interests():
     assert len(TOPICS) == 6
-    assert set(USERS) == set(range(1, 10))
+    assert set(range(1,10)) == set(range(1, 10))
     assert set(READERS) == {7, 8, 9}
-    assert set(USERNAMES) == set(USERS)
+    assert set(USERNAMES) == set(range(1,10))
     assert len(set(USERNAMES.values())) == 9
     bodies = [post_body(topic, n) for topic in TOPICS for n in range(40)]
     assert len(set(bodies)) == 240

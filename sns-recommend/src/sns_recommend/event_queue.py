@@ -149,7 +149,7 @@ def migrate_legacy() -> None:
             for row in work:
                 if row["status"] in ("done","superseded"):
                     continue
-                action = {"index":"post.updated","profile":"profile.updated","build":"recommend.requested"}[row["kind"]]
+                action = {"index":"post.updated","profile":"recommend.requested","build":"recommend.requested"}[row["kind"]]
                 conn.execute(
                     """INSERT INTO recommend_events(id,action,user_id,post_id,version,created_at)
                     VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
