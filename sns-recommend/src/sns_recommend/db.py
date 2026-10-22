@@ -17,8 +17,9 @@ def connection():
 @contextmanager
 def source_connection():
     """SNS database. Its timestamps carry no zone, so every session reads them as UTC."""
-    with psycopg.connect(settings().source_database_url, row_factory=dict_row,
-                         options="-c timezone=UTC") as conn:
+    with psycopg.connect(
+        settings().source_database_url, row_factory=dict_row, options="-c timezone=UTC"
+    ) as conn:
         yield conn
 
 
@@ -42,7 +43,5 @@ def initialize():
         for path in sorted((root / "sql").glob("*.sql")):
             conn.execute(path.read_text())
     from .event_queue import migrate_legacy
+
     migrate_legacy()
-
-
-
