@@ -24,7 +24,7 @@ def run_one() -> bool:
         if not finish(event):
             raise RuntimeError("event lease lost")
     except Exception as exc:
-        logger.warning("Event %s failed: %s",event["id"],type(exc).__name__)
+        logger.warning("Event %s failed: %s", event["id"], type(exc).__name__)
         retry(event)
     return True
 
@@ -32,16 +32,16 @@ def run_one() -> bool:
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--once",action="store_true")
+    parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     if args.once:
-        print(json.dumps({"processed":run_one()}))
+        print(json.dumps({"processed": run_one()}))
     else:
         while True:
             try:
                 processed = run_one()
-            except (psycopg.Error,RedisError) as exc:
-                logger.warning("Worker storage unavailable: %s",type(exc).__name__)
+            except (psycopg.Error, RedisError) as exc:
+                logger.warning("Worker storage unavailable: %s", type(exc).__name__)
                 processed = False
             if not processed:
                 time.sleep(1)
