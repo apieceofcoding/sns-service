@@ -149,9 +149,9 @@ uv run sns-recommend index
 기존 글은 한 번에 최대 20개씩 색인해요. `indexed: 0`이 될 때까지 반복합니다.
 
 ```sh
-# 글 변경과 좋아요 기록
+# 글 변경과 독자별 좋아요 6개 기록
 uv run sns-recommend source-post --post 1001
-uv run sns-recommend action --action like --user 7 --post 1
+uv run sns-recommend seed-actions
 # 변경을 벡터에 반영하고 행동 처리 완료 표시
 uv run sns-recommend-event-worker --once
 # 별도 터미널에서 계속 처리
@@ -160,7 +160,7 @@ uv run sns-recommend-event-worker
 
 `recommend_events`에 기록한 변경을 별도 이벤트 worker가 처리해요. 처리 후 `--once`를 다시 실행하면 `processed: 0`입니다. 행동 기록은 남습니다.
 
-### part-4. 관심사 검색
+### part-4. 행동 기반 검색
 
 ```sh
 git switch part-4-retrieval
@@ -169,7 +169,7 @@ uv run sns-recommend init
 uv run sns-recommend embedding --user 7
 ```
 
-관심사에 맞는 추천 ID를 확인합니다.
+클릭과 좋아요에 맞는 추천 ID를 확인합니다.
 
 ### part-5. 재정렬
 

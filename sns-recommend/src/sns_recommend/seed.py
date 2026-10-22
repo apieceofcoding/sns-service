@@ -12,12 +12,6 @@ TOPICS = {
     "travel_video": "여행 브이로그를 촬영하고 편집해서 여행 유튜브에 올려요",
     "fitness_food": "운동 식단과 러닝 전후 식사, 주말 밀프렙을 기록해요",
 }
-READERS = {
-    7: "Python 백엔드와 AI 개발에 관심이 많고 데이터베이스 설계와 RAG를 공부하고 있어요",
-    8: "새로운 여행지와 여행 일정 짜기를 좋아하고 여행 유튜브와 브이로그를 즐겨 봐요",
-    9: "운동과 러닝을 꾸준히 하고 건강한 식단과 운동 후 식사에 관심이 있어요",
-}
-USERS = {**dict(enumerate(TOPICS.values(), 1)), **READERS}
 USERNAMES = {
     1: "minjun_dev",
     2: "jiwoo_trip",
@@ -34,7 +28,7 @@ USERNAMES = {
 def seed():
     now = datetime.now(UTC)
     with source_connection() as conn:
-        for user_id, interests in USERS.items():
+        for user_id in USERNAMES:
             username = USERNAMES[user_id]
             existing = conn.execute("SELECT username FROM users WHERE id=%s", (user_id,)).fetchone()
             if existing and existing["username"] != username:
@@ -44,11 +38,7 @@ def seed():
                 VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                 (user_id, username, now, now),
             )
-            conn.execute(
-                """INSERT INTO user_interests(user_id,interests)
-                VALUES (%s,%s) ON CONFLICT DO NOTHING""",
-                (user_id, interests),
-            )
+
         for i in range(1, 241):
             topic = list(TOPICS)[(i - 1) % 6]
             author_id = 1 + (i - 1) % 6
