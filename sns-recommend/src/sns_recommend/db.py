@@ -9,7 +9,7 @@ from .config import settings
 
 @contextmanager
 def connection():
-    """Recommend database: vectors, events, jobs and checkpoints."""
+    """Recommend database: vectors, profiles and checkpoints."""
     with psycopg.connect(settings().database_url, row_factory=dict_row) as conn:
         yield conn
 
@@ -41,3 +41,8 @@ def initialize():
     with connection() as conn:
         for path in sorted((root / "sql").glob("*.sql")):
             conn.execute(path.read_text())
+    from .event_queue import migrate_legacy
+    migrate_legacy()
+
+
+

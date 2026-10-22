@@ -4,7 +4,7 @@ from . import source
 from .feed import read_feed
 from .db import connection
 from .events import Event, accept_event, excluded_ids
-from .jobs import enqueue
+from .event_queue import enqueue
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
 

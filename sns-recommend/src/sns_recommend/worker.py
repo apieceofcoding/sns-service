@@ -1,39 +1,48 @@
+from __future__ import annotations
+
 import argparse
 import json
+import logging
 import time
-from .jobs import claim, finish, retry
-from .indexing import index_posts
-from .retrieval import process_profile
+
+import psycopg
+from redis.exceptions import RedisError
+
+from .event_queue import claim, finish, heartbeat, retry
 from .graph import run_graph
 
+logger = logging.getLogger(__name__)
 
-def run_one():
-    job = claim()
-    if not job:
+
+def run_one() -> bool:
+    event = claim(("recommend.requested",))
+    if event is None:
         return False
     try:
-        if job["kind"] == "index":
-            index_posts([job["post_id"]])
-        elif job["kind"] == "build":
-            run_graph(job)
-            return True
-        else:
-            process_profile(job["user_id"])
-        finish(job)
+        with heartbeat(event):
+            run_graph(event)
+
     except Exception as exc:
-        retry(job, type(exc).__name__)
+        logger.warning("Event %s failed: %s",event["id"],type(exc).__name__)
+        retry(event)
     return True
 
 
-def main():
+def main() -> None:
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--once",action="store_true")
     args = parser.parse_args()
     if args.once:
         print(json.dumps({"processed":run_one()}))
     else:
         while True:
-            if not run_one():
+            try:
+                processed = run_one()
+            except (psycopg.Error,RedisError) as exc:
+                logger.warning("Worker storage unavailable: %s",type(exc).__name__)
+                processed = False
+            if not processed:
                 time.sleep(1)
 
 

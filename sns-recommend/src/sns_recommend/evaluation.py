@@ -33,7 +33,7 @@ def evaluate(path="data/evaluation.json", k=10):
     for user in data["users"]:
         profile = embedding.embed_query(user["interests"])
         history = [a for a in past if a["user_id"]==user["id"]]
-        liked = [index[a["post_id"]] for a in history if a["kind"]=="like"]
+        liked = [index[a["post_id"]] for a in history if a["action"]=="like"]
         if liked:
             profile = normalize([0.7*x+0.3*sum(v[i] for v in liked)/len(liked)
                                  for i,x in enumerate(profile)])

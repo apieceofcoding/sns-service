@@ -14,7 +14,7 @@ def test_evaluation_separates_context_from_available_candidates(tmp_path,monkeyp
     from pathlib import Path
     data=json.loads(Path("data/evaluation.json").read_text())
     # An action after cutoff must not leak into the interests used for ranking.
-    data["actions"].append({"user_id":1,"kind":"like","post_id":2,"at":"2026-10-05T00:00:00+00:00"})
+    data["actions"].append({"user_id":1,"action": "like","post_id":2,"at":"2026-10-05T00:00:00+00:00"})
     path=tmp_path/"eval.json"
     path.write_text(json.dumps(data))
     expected=evaluate()
