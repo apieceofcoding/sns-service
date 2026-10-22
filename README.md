@@ -153,6 +153,8 @@ uv run sns-recommend relay
 
 ### part-4. 게시글 색인
 
+처음에는 아래 [모델 설정](#모델-설정)의 Ollama 준비 명령을 실행합니다.
+
 ```sh
 git switch part-4-indexing
 uv sync --locked
@@ -276,15 +278,42 @@ docker compose up -d --wait  # part-2부터
 
 ## 모델 설정
 
-4단원부터 적용합니다. `sns-recommend/`에서 `.env.example`을 `.env`로 복사하고 필요한 값을 입력해요.
+기본 실습은 **최신 Ollama로 로컬 모델을 실제 호출**합니다. 외부 API 키와 사용료는 필요 없어요. 4단원부터 적용합니다.
 
-| MODEL_MODE | 동작 |
+```sh
+# Ollama 설치 후 sns-recommend/에서 한 번 준비
+ollama pull qwen3-embedding:0.6b
+ollama pull qwen3-vl:2b-instruct
+ollama create sns-reranker -f ollama.Modelfile
+# Ollama 앱이 실행 중이면 별도 serve는 불필요
+ollama list
+```
+
+Ollama 앱 대신 CLI로 켜려면 별도 터미널에서 `ollama serve`를 실행합니다.
+
+```dotenv
+# 코드 기본값. 기존 .env가 있다면 맞춰주세요.
+MODEL_MODE=live
+MODEL_BASE_URL=http://localhost:11434/v1
+MODEL_API_KEY=ollama
+EMBEDDING_MODEL=qwen3-embedding:0.6b
+RERANK_MODEL=sns-reranker
+DIMENSIONS=768
+```
+
+임베딩은 Qwen3 Embedding 0.6B, 재정렬은 Qwen3-VL 2B를 사용해요. `sns-reranker`는 8192 컨텍스트로 만든 모델 별칭입니다. 이미지 설명에도 같은 생성 API를 사용할 수 있습니다. 두 모델의 다운로드는 약 639MB와 1.9GB이며 실행 메모리는 별도입니다.
+
+| 모드 | 용도 |
 |---|---|
-| fixture | 기본값. 모의 벡터와 순위, 외부 호출 없음 |
-| live | `GOOGLE_API_KEY`로 실제 Gemini 호출 |
-| record | 실제 호출 후 응답 저장 |
-| replay | 동일 입력과 모델의 저장된 응답 재생 |
+| live | 기본. 실제 로컬 추론 |
+| record | 실제 응답 저장 |
+| replay | 같은 입력, 서버와 모델의 저장 응답 재사용 |
+| fixture | 자동 검사와 저사양 환경용 모의 응답. 품질 평가에 사용하지 않음 |
 
-실제 호출은 `EMBEDDING_MODEL`과 `RERANK_MODEL`도 설정합니다. live/record 색인은 한 번에 최대 20개 글을 처리하므로 남은 글이 있으면 `index`를 반복해요. 모델을 바꾸면 색인도 다시 실행합니다. API 키와 녹화 파일은 Git에 넣지 않습니다.
+생성은 OpenAI 호환 `/v1/chat/completions`, 임베딩은 `/v1/embeddings`로 호출합니다. 모델이나 서버를 바꾸면 다시 색인해요. API 응답의 JSON, 후보 ID와 벡터 차원을 검증합니다.
 
-8단원 평가는 합성 정답셋, 9단원 benchmark는 Redis 읽기만 측정해요. 실제 클릭률과 SNS 전체 응답 시간을 뜻하지 않습니다. 기본 일일 호출 예산 20회는 제공자의 무료 한도와 다릅니다.
+Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 사용합니다. Ollama도 Docker에서 접근할 수 있는 호스트 주소에 리스닝해야 해요. [호스트 설정](https://docs.ollama.com/faq)
+
+OpenAI API는 강사용 비교 선택입니다. 서버 주소, 모델명과 키를 계정에서 사용 가능한 값으로 바꿔요. 수강생 기본 실습은 OpenAI 결제를 요구하지 않습니다. 키와 녹화 파일은 Git에 넣지 않습니다.
+
+8단원은 합성 정답셋 평가, 9단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
