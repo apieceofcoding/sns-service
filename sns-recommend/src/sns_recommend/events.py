@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal, Self, Any
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -13,11 +13,11 @@ from .db import source_connection
 class Event(BaseModel):
     model_config = ConfigDict(extra="forbid")
     event_id: UUID
-    action: Literal["post.updated","post.deleted","impression","click","like","not_interested"]
+    action: Literal["post.updated", "post.deleted", "impression", "click", "like", "not_interested"]
     occurred_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
-    user_id: int | None = Field(default=None,gt=0,le=2**63-1,strict=True)
-    post_id: int | None = Field(default=None,gt=0,le=2**63-1,strict=True)
-    version: int | None = Field(default=None,ge=1,le=2**63-1,strict=True)
+    user_id: int | None = Field(default=None, gt=0, le=2**63 - 1, strict=True)
+    post_id: int | None = Field(default=None, gt=0, le=2**63 - 1, strict=True)
+    version: int | None = Field(default=None, ge=1, le=2**63 - 1, strict=True)
 
     @model_validator(mode="after")
     def validate_fields(self) -> Self:
@@ -32,23 +32,30 @@ class Event(BaseModel):
         return self
 
 
-def accept_event(event: Event) -> dict[str,bool]:
+def accept_event(event: Event) -> dict[str, bool]:
     if event.user_id is not None and not source.user_exists(event.user_id):
         raise LookupError("unknown user")
     with source_connection() as conn:
         row = conn.execute(
             """INSERT INTO recommend_events(id,action,user_id,post_id,version,created_at)
             VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id""",
-            (event.event_id,event.action,event.user_id,event.post_id,event.version,event.occurred_at),
+            (
+                event.event_id,
+                event.action,
+                event.user_id,
+                event.post_id,
+                event.version,
+                event.occurred_at,
+            ),
         ).fetchone()
-    return {"accepted":bool(row),"duplicate":not bool(row)}
+    return {"accepted": bool(row), "duplicate": not bool(row)}
 
 
-def excluded_ids(conn: Any, user_id: int) -> set[int]:
-    # Read the original event history, including events not consumed yet.
+def excluded_ids(user_id: int) -> set[int]:
     with source_connection() as original:
         rows = original.execute(
             """SELECT DISTINCT post_id FROM recommend_events WHERE user_id=%s
-            AND action IN ('impression','not_interested') AND created_at<=now()""",(user_id,),
+            AND action IN ('impression','not_interested') AND created_at<=now()""",
+            (user_id,),
         ).fetchall()
     return {row["post_id"] for row in rows}

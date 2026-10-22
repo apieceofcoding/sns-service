@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -29,7 +28,8 @@ def enqueue(action: str, user_id: int, throttle: bool = False) -> str | None:
                 return None
         row = conn.execute(
             """INSERT INTO recommend_events(action,user_id) VALUES (%s,%s)
-            ON CONFLICT DO NOTHING RETURNING id""", (action, user_id),
+            ON CONFLICT DO NOTHING RETURNING id""",
+            (action, user_id),
         ).fetchone()
         if not row:
             row = conn.execute(
@@ -53,8 +53,10 @@ def claim(actions: Sequence[str], event_id: str | None = None) -> EventRecord | 
             return None
         row["claim_id"] = uuid4()
         row["locked_until"] = datetime.now(UTC) + timedelta(seconds=settings().lease_seconds)
-        conn.execute("UPDATE recommend_events SET claim_id=%s,locked_until=%s WHERE id=%s",
-                     (row["claim_id"],row["locked_until"],row["id"]))
+        conn.execute(
+            "UPDATE recommend_events SET claim_id=%s,locked_until=%s WHERE id=%s",
+            (row["claim_id"], row["locked_until"], row["id"]),
+        )
     return row
 
 
@@ -63,7 +65,8 @@ def renew(event: EventRecord) -> None:
         row = conn.execute(
             """UPDATE recommend_events SET locked_until=now()+make_interval(secs=>%s)
             WHERE id=%s AND claim_id=%s AND processed_at IS NULL AND locked_until>now()
-            RETURNING id""", (settings().lease_seconds,event["id"],event["claim_id"]),
+            RETURNING id""",
+            (settings().lease_seconds, event["id"], event["claim_id"]),
         ).fetchone()
         if row is None:
             raise RuntimeError("event lease lost")
@@ -75,14 +78,14 @@ def heartbeat(event: EventRecord) -> Iterator[None]:
     lost: list[Exception] = []
 
     def extend() -> None:
-        while not stop.wait(max(.1,settings().lease_seconds/3)):
+        while not stop.wait(max(0.1, settings().lease_seconds / 3)):
             try:
                 renew(event)
             except Exception as exc:
                 lost.append(exc)
                 return
 
-    thread = Thread(target=extend,daemon=True)
+    thread = Thread(target=extend, daemon=True)
     thread.start()
     try:
         yield
@@ -95,11 +98,14 @@ def heartbeat(event: EventRecord) -> Iterator[None]:
 
 def finish(event: EventRecord) -> bool:
     with source_connection() as conn:
-        return conn.execute(
-            """UPDATE recommend_events SET processed_at=now() WHERE id=%s AND claim_id=%s
+        return (
+            conn.execute(
+                """UPDATE recommend_events SET processed_at=now() WHERE id=%s AND claim_id=%s
             AND processed_at IS NULL AND locked_until>now() RETURNING id""",
-            (event["id"],event["claim_id"]),
-        ).fetchone() is not None
+                (event["id"], event["claim_id"]),
+            ).fetchone()
+            is not None
+        )
 
 
 def retry(event: EventRecord) -> None:
@@ -107,7 +113,7 @@ def retry(event: EventRecord) -> None:
         conn.execute(
             """UPDATE recommend_events SET locked_until=now()+interval '30 seconds'
             WHERE id=%s AND claim_id=%s AND processed_at IS NULL""",
-            (event["id"],event["claim_id"]),
+            (event["id"], event["claim_id"]),
         )
 
 
@@ -115,15 +121,16 @@ def allocate_generation(conn: Any, user_id: int) -> int:
     row = conn.execute(
         """INSERT INTO profiles(user_id,generation) VALUES (%s,%s)
         ON CONFLICT(user_id) DO UPDATE SET generation=GREATEST(profiles.generation+1,EXCLUDED.generation) RETURNING generation""",
-        (user_id,time.time_ns()//1000),
+        (user_id, time.time_ns() // 1000),
     ).fetchone()
     return row["generation"]
 
 
 def current_generation(conn: Any, user_id: int) -> int:
     conn.execute("INSERT INTO profiles(user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
-    return conn.execute("SELECT generation FROM profiles WHERE user_id=%s FOR UPDATE",
-                        (user_id,)).fetchone()["generation"]
+    return conn.execute(
+        "SELECT generation FROM profiles WHERE user_id=%s FOR UPDATE", (user_id,)
+    ).fetchone()["generation"]
 
 
 def migrate_legacy() -> None:
@@ -137,23 +144,45 @@ def migrate_legacy() -> None:
         work = old.execute("SELECT * FROM jobs").fetchall() if has_jobs else []
         with source_connection() as conn:
             for row in history:
-                version = row["payload"].get("version",1) if row["kind"].startswith("post.") else None
+                version = (
+                    row["payload"].get("version", 1) if row["kind"].startswith("post.") else None
+                )
                 conn.execute(
                     """INSERT INTO recommend_events(id,action,user_id,post_id,version,created_at)
                     VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
-                    (row["event_id"],row["kind"],row["user_id"],row["post_id"],version,row["occurred_at"]),
+                    (
+                        row["event_id"],
+                        row["kind"],
+                        row["user_id"],
+                        row["post_id"],
+                        version,
+                        row["occurred_at"],
+                    ),
                 )
             for row in excluded:
-                conn.execute("INSERT INTO recommend_events(action,user_id,post_id,processed_at) VALUES (%s,%s,%s,now())",
-                             (row["reason"],row["user_id"],row["post_id"]))
+                conn.execute(
+                    "INSERT INTO recommend_events(action,user_id,post_id,processed_at) VALUES (%s,%s,%s,now())",
+                    (row["reason"], row["user_id"], row["post_id"]),
+                )
             for row in work:
-                if row["status"] in ("done","superseded"):
+                if row["status"] in ("done", "superseded"):
                     continue
-                action = {"index":"post.updated","profile":"recommend.requested","build":"recommend.requested"}[row["kind"]]
+                action = {
+                    "index": "post.updated",
+                    "profile": "recommend.requested",
+                    "build": "recommend.requested",
+                }[row["kind"]]
                 conn.execute(
                     """INSERT INTO recommend_events(id,action,user_id,post_id,version,created_at)
                     VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
-                    (row["id"],action,row["user_id"],row["post_id"],row["payload"].get("version",1) if action=="post.updated" else None,row["created_at"]),
+                    (
+                        row["id"],
+                        action,
+                        row["user_id"],
+                        row["post_id"],
+                        row["payload"].get("version", 1) if action == "post.updated" else None,
+                        row["created_at"],
+                    ),
                 )
         if has_events or has_jobs or has_exclusions:
             with source_connection() as original:

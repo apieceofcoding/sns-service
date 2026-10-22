@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException, Query
 from redis.exceptions import RedisError
+
 from . import source
-from .feed import read_feed
-from .db import connection
 from .events import Event, accept_event, excluded_ids
+from .feed import read_feed
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
 
@@ -16,8 +16,7 @@ def health():
 @app.get("/internal/feeds/{user_id}")
 def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None = None):
     try:
-        with connection() as conn:
-            excluded = excluded_ids(conn, user_id)
+        excluded = excluded_ids(user_id)
         # Deleted posts are checked in the SNS database, only for the IDs this page can show.
         return read_feed(user_id, limit, cursor, excluded, alive=source.alive_ids)
     except ValueError as exc:
