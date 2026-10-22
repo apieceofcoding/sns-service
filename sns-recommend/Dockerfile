@@ -8,4 +8,4 @@ COPY sql sql
 COPY README.md .
 RUN uv sync --locked --no-dev
 ENV PYTHONUNBUFFERED=1 UV_NO_SYNC=1
-CMD ["uv", "run", "sns-recommend-batch"]
+CMD ["uv", "run", "sns-recommend-event-worker"]

@@ -142,17 +142,17 @@ uv sync --locked
 docker compose up -d --wait
 uv run sns-recommend init
 uv run sns-recommend source-post --post 1001
-uv run sns-recommend-batch --once
+uv run sns-recommend-event-worker --once
 ```
 
 `delivered: 1`을 확인해요. 다시 실행하면 `0`입니다. `init`은 기존 데이터를 유지해요.
 
 ```sh
 # 별도 터미널에서 실행: 3초마다 Outbox 조회, Ctrl+C로 종료
-uv run sns-recommend-batch
+uv run sns-recommend-event-worker
 ```
 
-배치는 FastAPI와 별도 프로세스입니다. 이벤트와 작업을 저장한 뒤 전달 완료를 표시해요.
+이벤트 워커는 FastAPI와 별도 프로세스입니다. 이벤트와 작업을 저장한 뒤 전달 완료를 표시해요.
 
 ### part-4. 게시글 색인
 
