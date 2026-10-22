@@ -248,7 +248,7 @@ docker compose up -d --wait  # part-2부터
 
 작성자 6명, 독자 3명과 게시글 240개를 준비합니다.
 
-| ID | 역할 | 주제 또는 관심사 |
+| ID | 역할 | 작성 주제 또는 좋아요를 누른 글 |
 |---|---|---|
 | 1 | 작성자 | 백엔드 개발 |
 | 2 | 작성자 | 여행 |
@@ -266,8 +266,8 @@ docker compose up -d --wait  # part-2부터
 
 | 저장소 | 내용 | 연결 설정 |
 |---|---|---|
-| SNS DB (`snsdb`, 5432) | 회원과 게시글 원본, 관심사, recommend_events | `SOURCE_DATABASE_URL` |
-| 추천 DB (`recommend`, 55432) | 글 ID별 벡터, 행동, 작업과 체크포인트 | `DATABASE_URL` |
+| SNS DB (`snsdb`, 5432) | 회원과 게시글 원본, recommend_events | `SOURCE_DATABASE_URL` |
+| 추천 DB (`recommend`, 55432) | 글 벡터와 캐시, 사용자 벡터와 체크포인트 | `DATABASE_URL` |
 | Redis (56379) | 완성된 추천 ID 목록 | `REDIS_URL` |
 
 본문은 SNS DB에서 읽어요. 글 변경 이벤트에는 ID와 버전만 담고, worker가 원본을 읽어 벡터를 갱신합니다.
