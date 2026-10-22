@@ -22,16 +22,16 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-  batch:
+  event-worker:
     build: .
-    profiles: [batch]
+    profiles: [event-worker]
     extra_hosts: ["host.docker.internal:host-gateway"]
     environment:
       DATABASE_URL: postgresql://recommend:recommend@db:5432/recommend
       SOURCE_DATABASE_URL: postgresql://snsuser:snspassword@host.docker.internal:5432/snsdb
     depends_on:
       db: {condition: service_healthy}
-    command: ["uv", "run", "sns-recommend-batch"]
+    command: ["uv", "run", "sns-recommend-event-worker"]
     restart: unless-stopped
     cpus: 0.5
     mem_limit: 256m
