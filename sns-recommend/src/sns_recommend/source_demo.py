@@ -20,7 +20,7 @@ def change_post(post_id, body, author_id=1):
         # The event carries only the ID and version. The body stays in the SNS database.
         event = Event(event_id=uuid4(), kind="post.updated", post_id=post_id,
                       version=row["content_version"])
-        conn.execute("INSERT INTO recommendation_outbox(id,event) VALUES (%s,%s)",
+        conn.execute("INSERT INTO recommend_outbox(id,event) VALUES (%s,%s)",
                      (event.event_id, Jsonb(event.model_dump(mode="json"))))
     return {"event_id": str(event.event_id), "version": row["content_version"]}
 
@@ -28,13 +28,13 @@ def change_post(post_id, body, author_id=1):
 def relay(url="http://localhost:8001"):
     count = 0
     with source_connection() as conn:
-        rows = conn.execute("""SELECT * FROM recommendation_outbox
+        rows = conn.execute("""SELECT * FROM recommend_outbox
             WHERE delivered_at IS NULL ORDER BY created_at""").fetchall()
     for row in rows:
         response = httpx.post(url + "/internal/events", json=row["event"], timeout=5)
         response.raise_for_status()
         with source_connection() as conn:
-            conn.execute("UPDATE recommendation_outbox SET delivered_at=now() WHERE id=%s",
+            conn.execute("UPDATE recommend_outbox SET delivered_at=now() WHERE id=%s",
                          (row["id"],))
         count += 1
     return {"delivered": count}

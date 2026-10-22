@@ -1,1 +1,1 @@
-"""Course recommendation service."""
+"""Course recommend service."""
