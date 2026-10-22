@@ -11,10 +11,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://recommend:recommend@localhost:55432/recommend"
     redis_url: str = "redis://localhost:56379/0"
     cursor_secret: str = "course-local-cursor-secret"
-    model_mode: Literal["fixture", "live", "record", "replay"] = "fixture"
-    google_api_key: SecretStr = SecretStr("")
-    embedding_model: str = "gemini-embedding-2"
-    rerank_model: str = "gemini-3.5-flash-lite"
+    model_mode: Literal["fixture", "live", "record", "replay"] = "live"
+    model_api_key: SecretStr = SecretStr("ollama")
+    model_base_url: str = "http://localhost:11434/v1"
+    model_timeout_seconds: float = 120
+    embedding_model: str = "qwen3-embedding:0.6b"
+    rerank_model: str = "sns-reranker"
     dimensions: int = 768
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
