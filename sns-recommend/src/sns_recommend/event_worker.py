@@ -12,7 +12,7 @@ from .event_queue import EventRecord, claim, finish, heartbeat, retry
 from .indexing import index_posts
 
 logger = logging.getLogger(__name__)
-ACTIONS = ("post.updated","post.deleted","impression","click","like","not_interested","profile.updated")
+ACTIONS = ("post.updated","post.deleted","impression","click","like","not_interested")
 
 
 def handle(event: EventRecord) -> None:

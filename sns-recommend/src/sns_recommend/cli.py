@@ -5,13 +5,13 @@ from .events import Event, accept_event
 from .db import initialize, source_connection
 from .seed import seed
 from .baseline import baseline
-from .source_demo import change_post
+from .source_demo import change_post, seed_actions
 from .indexing import index_posts
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["init", "seed", "status", "baseline", "source-post", "action", "index"])
+    parser.add_argument("command", choices=["init", "seed", "status", "baseline", "source-post", "seed-actions", "action", "index"])
     parser.add_argument("--user", type=int, default=1)
     parser.add_argument("--strategy", choices=["latest", "popular"], default="latest")
     parser.add_argument("--post", type=int, default=1001)
@@ -28,6 +28,8 @@ def main():
         result = baseline(args.user, args.strategy)
     elif args.command == "action":
         result = accept_event(Event(event_id=uuid4(),action=args.action,user_id=args.user,post_id=args.post))
+    elif args.command == "seed-actions":
+        result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
     elif args.command == "index":

@@ -50,13 +50,8 @@ DROP TRIGGER IF EXISTS recommend_update ON posts;
 CREATE TRIGGER recommend_update AFTER UPDATE ON posts FOR EACH ROW
  WHEN (NEW.content_version IS DISTINCT FROM OLD.content_version) EXECUTE FUNCTION recommend_post_event();
 
-CREATE OR REPLACE FUNCTION recommend_interest_event() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- INSERT INTO recommend_events(action,user_id) VALUES ('profile.updated',NEW.user_id);
- RETURN NEW;
-END $$;
-DROP TRIGGER IF EXISTS recommend_interest_insert ON user_interests;
-CREATE TRIGGER recommend_interest_insert AFTER INSERT ON user_interests FOR EACH ROW EXECUTE FUNCTION recommend_interest_event();
-DROP TRIGGER IF EXISTS recommend_interest_update ON user_interests;
-CREATE TRIGGER recommend_interest_update AFTER UPDATE ON user_interests FOR EACH ROW
- WHEN (NEW.interests IS DISTINCT FROM OLD.interests) EXECUTE FUNCTION recommend_interest_event();
+DROP TRIGGER IF EXISTS recommend_interest_insert ON users;
+DROP TRIGGER IF EXISTS recommend_interest_update ON users;
+UPDATE recommend_events SET action='recommend.requested',processed_at=COALESCE(processed_at,now())
+ WHERE action='profile.updated';
+DROP FUNCTION IF EXISTS recommend_interest_event();
