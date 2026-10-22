@@ -132,7 +132,7 @@ uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
 uv run sns-recommend baseline --user 10 --strategy latest
 ```
 
-[SNS 화면](http://localhost:3000)을 새로고침하고 **추천** 탭에서 게시글을 확인해요. **팔로잉** 탭은 기존 타임라인입니다. [추천 피드 API](http://localhost:8080/api/v1/recommendations)에서도 `mode: recommend`와 `posts`를 확인할 수 있습니다.
+[SNS 화면](http://localhost:3000)을 새로고침하고 **추천** 탭에서 게시글을 확인해요. **팔로잉** 탭은 기존 타임라인입니다. [추천 피드 API](http://localhost:8080/api/v1/recommend)에서도 `mode: recommend`와 `posts`를 확인할 수 있습니다.
 
 ### part-3. 이벤트 전달
 
@@ -220,7 +220,7 @@ uv run sns-recommend graph --user 7
 uv run sns-recommend benchmark --user 7
 ```
 
-`sns-recommend/reports/benchmark.json`에서 Redis 조회 속도와 목록 나이를 확인해요. 추천 API를 중단하고 같은 브라우저에서 [추천 피드 API](http://localhost:8080/api/v1/recommendations)를 새로고침하면 `mode: latest`로 응답합니다.
+`sns-recommend/reports/benchmark.json`에서 Redis 조회 속도와 목록 나이를 확인해요. 추천 API를 중단하고 같은 브라우저에서 [추천 피드 API](http://localhost:8080/api/v1/recommend)를 새로고침하면 `mode: latest`로 응답합니다.
 
 ```sh
 # 2단원 명령으로 API를 다시 켜고 브라우저에서 추천 피드 조회

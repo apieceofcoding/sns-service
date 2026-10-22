@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.*;
 
-class RecommendationClientTest {
+class RecommendFeedClientTest {
 
     private HttpServer server;
     private final AtomicReference<String> path = new AtomicReference<>();
@@ -50,7 +50,7 @@ class RecommendationClientTest {
                 .isInstanceOf(org.springframework.web.client.HttpClientErrorException.Gone.class);
     }
 
-    private RecommendationClient start(int status, String body) throws Exception {
+    private RecommendFeedClient start(int status, String body) throws Exception {
         server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
         server.createContext("/internal/feeds/7", exchange -> {
             path.set(exchange.getRequestURI().toString());
@@ -62,7 +62,7 @@ class RecommendationClientTest {
             exchange.close();
         });
         server.start();
-        return new RecommendationClient(RestClient.builder(), ClientHttpRequestFactoryBuilder.detect(),
+        return new RecommendFeedClient(RestClient.builder(), ClientHttpRequestFactoryBuilder.detect(),
                 HttpClientSettings.defaults(), "http://localhost:" + server.getAddress().getPort());
     }
 }

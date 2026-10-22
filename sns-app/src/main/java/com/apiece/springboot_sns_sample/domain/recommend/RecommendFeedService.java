@@ -1,4 +1,4 @@
-package com.apiece.springboot_sns_sample.domain.recommendation;
+package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.apiece.springboot_sns_sample.domain.post.Post;
 import com.apiece.springboot_sns_sample.domain.post.PostRepository;
@@ -12,9 +12,9 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class RecommendationService {
+public class RecommendFeedService {
 
-    private final RecommendationClient client;
+    private final RecommendFeedClient client;
     private final PostRepository posts;
 
     public Page get(long userId, int limit, String cursor) {
