@@ -10,14 +10,20 @@ from .config import settings
 
 
 def redis_client():
-    return Redis.from_url(settings().redis_url, decode_responses=True,
-                          socket_connect_timeout=1, socket_timeout=1)
+    return Redis.from_url(
+        settings().redis_url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1
+    )
 
 
 def publish(user_id, ids, strategy):
     snapshot_id = uuid4().hex
-    payload = {"snapshot_id": snapshot_id, "ids": ids, "strategy": strategy,
-               "created_at": time.time(), "generation": 0}
+    payload = {
+        "snapshot_id": snapshot_id,
+        "ids": ids,
+        "strategy": strategy,
+        "created_at": time.time(),
+        "generation": 0,
+    }
     encoded = json.dumps(payload)
     with redis_client().pipeline() as pipe:
         pipe.set(f"recommend:feed:{user_id}:{snapshot_id}", encoded, ex=settings().snapshot_ttl)
@@ -59,8 +65,15 @@ def read_feed(user_id, limit=20, cursor=None):
         return {"ready": False, "post_ids": [], "next_cursor": None}
     data = json.loads(raw)
     ids = data["ids"]
-    selected = ids[offset:offset + limit]
+    selected = ids[offset : offset + limit]
     offset += len(selected)
-    return {"ready": True, "post_ids": selected, "snapshot_id": data["snapshot_id"],
-            "strategy": data["strategy"], "created_at": data["created_at"],
-            "next_cursor": cursor_encode(user_id, data["snapshot_id"], offset) if offset < len(ids) else None}
+    return {
+        "ready": True,
+        "post_ids": selected,
+        "snapshot_id": data["snapshot_id"],
+        "strategy": data["strategy"],
+        "created_at": data["created_at"],
+        "next_cursor": cursor_encode(user_id, data["snapshot_id"], offset)
+        if offset < len(ids)
+        else None,
+    }

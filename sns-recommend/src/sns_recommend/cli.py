@@ -19,14 +19,15 @@ def main():
     try:
         result = execute(args)
     except psycopg.OperationalError:
-        parser.exit(1, "PostgreSQL 연결 실패: SOURCE_DATABASE_URL을 확인해요.\n"
-                    "docker compose -f ../sns-app/docker-compose.yml up -d --wait postgres\n")
+        parser.exit(
+            1,
+            "PostgreSQL 연결 실패: SOURCE_DATABASE_URL을 확인해요.\n"
+            "docker compose -f ../sns-app/docker-compose.yml up -d --wait postgres\n",
+        )
     except psycopg.errors.UndefinedTable:
-        parser.exit(1, "SNS 테이블이 없습니다.\n"
-                    "빈 실습 DB에서 실행: uv run sns-recommend seed\n")
+        parser.exit(1, "SNS 테이블이 없습니다.\n빈 실습 DB에서 실행: uv run sns-recommend seed\n")
     except (RedisConnectionError, RedisTimeoutError):
-        parser.exit(1, "Redis 연결 실패: REDIS_URL을 확인해요.\n"
-                    "docker compose up -d --wait\n")
+        parser.exit(1, "Redis 연결 실패: REDIS_URL을 확인해요.\ndocker compose up -d --wait\n")
     print(json.dumps(result, ensure_ascii=False, default=str))
 
 
@@ -40,5 +41,7 @@ def execute(args):
     if args.command == "baseline":
         return baseline(args.user, args.strategy)
     with source_connection() as conn:
-        return {"posts": conn.execute("SELECT count(*) AS n FROM posts").fetchone()["n"],
-                "users": conn.execute("SELECT count(*) AS n FROM users").fetchone()["n"]}
+        return {
+            "posts": conn.execute("SELECT count(*) AS n FROM posts").fetchone()["n"],
+            "users": conn.execute("SELECT count(*) AS n FROM users").fetchone()["n"],
+        }

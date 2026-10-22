@@ -9,8 +9,12 @@ from .config import settings
 
 @contextmanager
 def source_connection():
-    with psycopg.connect(settings().source_database_url, row_factory=dict_row,
-                         options="-c timezone=UTC", connect_timeout=5) as conn:
+    with psycopg.connect(
+        settings().source_database_url,
+        row_factory=dict_row,
+        options="-c timezone=UTC",
+        connect_timeout=5,
+    ) as conn:
         yield conn
 
 
