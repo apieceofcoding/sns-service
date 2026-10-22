@@ -51,10 +51,11 @@ services:
       SOURCE_DATABASE_URL: postgresql://snsuser:snspassword@host.docker.internal:5432/snsdb
       REDIS_URL: redis://redis:6379/0
       CURSOR_SECRET: ${CURSOR_SECRET:-course-local-cursor-secret}
-      MODEL_MODE: ${MODEL_MODE:-fixture}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-2}
-      RERANK_MODEL: ${RERANK_MODEL:-gemini-3.5-flash-lite}
+      MODEL_MODE: ${MODEL_MODE:-live}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-http://host.docker.internal:11434/v1}
+      MODEL_API_KEY: ${MODEL_API_KEY:-ollama}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3-embedding:0.6b}
+      RERANK_MODEL: ${RERANK_MODEL:-sns-reranker}
       DAILY_CALL_LIMIT: ${DAILY_CALL_LIMIT:-20}
     depends_on:
       api: {condition: service_healthy}

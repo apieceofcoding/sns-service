@@ -16,10 +16,12 @@ class Settings(BaseSettings):
     cursor_secret: SecretStr = Field(
         default=SecretStr("course-local-cursor-secret"), min_length=1, max_length=512
     )
-    model_mode: Literal["fixture", "live", "record", "replay"] = "fixture"
-    google_api_key: SecretStr = SecretStr("")
-    embedding_model: str = "gemini-embedding-2"
-    rerank_model: str = "gemini-3.5-flash-lite"
+    model_mode: Literal["fixture", "live", "record", "replay"] = "live"
+    model_api_key: SecretStr = SecretStr("ollama")
+    model_base_url: str = "http://localhost:11434/v1"
+    model_timeout_seconds: float = 120
+    embedding_model: str = "qwen3-embedding:0.6b"
+    rerank_model: str = "sns-reranker"
     dimensions: int = Field(default=768, ge=5)
     snapshot_ttl: int = Field(default=1800, gt=0)
     refresh_seconds: int = Field(default=300, gt=0)

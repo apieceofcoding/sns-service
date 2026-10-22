@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, cast
+from typing import Annotated, cast
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, StrictInt
 
 from sns_recommend.core.config import settings
 from sns_recommend.core.measurement import measured_call
-from sns_recommend.core.types import ModelMode, RankingInput, RankingResult, TokenUsage
+from sns_recommend.core.types import ModelMode, RankingInput, RankingResult
 from sns_recommend.providers.recordings import recording_path, write_recording
 
 PROMPT_VERSION = "sns-rank-v1"
@@ -46,13 +46,18 @@ def rerank_candidates(inputs: RankingInput) -> RankingResult:
     }
     cfg = settings()
     encoded = json.dumps(
-        {"model": inputs["model"], "prompt": PROMPT_VERSION, "data": payload},
+        {
+            "model": inputs["model"],
+            "endpoint": cfg.model_base_url,
+            "prompt": PROMPT_VERSION,
+            "data": payload,
+        },
         sort_keys=True,
         ensure_ascii=False,
     )
     path = recording_path("rank", encoded)
     if cfg.model_mode == "fixture":
-        # Synthetic ordering only. Never present this as a Gemini recording.
+        # Synthetic ordering only. Never present this as a model recording.
         return {
             "ordered_ids": [p["id"] for p in reversed(candidates)],
             "mode": "fixture",
@@ -63,35 +68,16 @@ def rerank_candidates(inputs: RankingInput) -> RankingResult:
         if data["input"] != encoded:
             raise ValueError("recording input mismatch")
         return cast(RankingResult, {**data["result"], "mode": "replay"})
-    from langchain_google_genai import ChatGoogleGenerativeAI
+    from sns_recommend.providers.model_api import chat
 
-    if not cfg.google_api_key.get_secret_value():
-        raise ValueError("GOOGLE_API_KEY required for live/record mode")
-    model = ChatGoogleGenerativeAI(
-        model=inputs["model"],
-        temperature=0,
-        google_api_key=cfg.google_api_key.get_secret_value(),
-        max_retries=0,
-        timeout=30,
-        vertexai=False,
-    )
-
-    def invoke() -> dict[str, Any]:
-        response = model.with_structured_output(
-            Ranking, method="json_schema", include_raw=True
-        ).invoke(PROMPT.format_messages(payload=json.dumps(payload, ensure_ascii=False)))
-        assert isinstance(response, dict)  # include_raw=True returns the SDK envelope.
-        response["usage"] = response["raw"].usage_metadata or {}
-        return response
-
-    response = measured_call("rerank", inputs["model"], invoke)
-    if response.get("parsing_error") or response.get("parsed") is None:
-        raise ValueError("invalid structured output")
-    result: RankingResult = {
-        "ordered_ids": response["parsed"].ordered_ids,
-        "mode": cfg.model_mode,
-        "usage": cast(TokenUsage, response["raw"].usage_metadata or {}),
-    }
+    messages = [
+        {"role": {"human": "user", "ai": "assistant"}.get(m.type, m.type), "content": m.content}
+        for m in PROMPT.format_messages(payload=json.dumps(payload, ensure_ascii=False))
+    ]
+    messages[0]["content"] += ' Return only JSON: {"ordered_ids": [1, 2]}.'
+    response = measured_call("rerank", inputs["model"], lambda: chat(messages, inputs["model"]))
+    parsed = Ranking.model_validate_json(response["content"])
+    result = {"ordered_ids": parsed.ordered_ids, "mode": cfg.model_mode, "usage": response["usage"]}
     if cfg.model_mode == "record":
         write_recording(path, {"input": encoded, "result": result})
     return result

@@ -31,12 +31,16 @@ def normalize(vector: Sequence[float]) -> list[float]:
 
 def space() -> str:
     cfg = settings()
-    family = "fixture" if cfg.model_mode == "fixture" else "gemini"
+    family = (
+        "fixture"
+        if cfg.model_mode == "fixture"
+        else "api-" + hashlib.sha256(cfg.model_base_url.rstrip("/").encode()).hexdigest()[:12]
+    )
     return f"{family}:{cfg.embedding_model}:{cfg.dimensions}"
 
 
 class FixtureEmbeddings(Embeddings):
-    """Synthetic topic features, not Gemini output or learned semantic embeddings."""
+    """Synthetic topic features, not model output or learned semantic embeddings."""
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         vectors = []
@@ -99,19 +103,9 @@ class CachedEmbeddings(Embeddings):
         cfg = settings()
         if cfg.model_mode == "fixture":
             return FixtureEmbeddings().embed_documents(texts)
-        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        from sns_recommend.providers.model_api import embed
 
-        if not cfg.google_api_key.get_secret_value():
-            raise ValueError("GOOGLE_API_KEY required for live/record mode")
-        provider = GoogleGenerativeAIEmbeddings(
-            model=cfg.embedding_model,
-            api_key=cfg.google_api_key,
-            output_dimensionality=cfg.dimensions,
-            client_args={"http_options": {"timeout": 30000, "retry_options": {"attempts": 1}}},
-        )
-        vectors = measured_call(
-            "embedding", cfg.embedding_model, lambda: provider.embed_documents(texts)
-        )
+        vectors = measured_call("embedding", cfg.embedding_model, lambda: embed(texts))
         return checked_vectors(vectors, len(texts))
 
     def embed_query(self, text: str) -> list[float]:

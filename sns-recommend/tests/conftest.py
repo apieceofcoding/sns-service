@@ -55,3 +55,7 @@ def infra(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
                     conn.execute(
                         sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name))
                     )
+
+
+def pytest_configure() -> None:
+    os.environ.setdefault("MODEL_MODE", "fixture")
