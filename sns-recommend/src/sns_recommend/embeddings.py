@@ -23,12 +23,12 @@ def normalize(vector):
 
 def space():
     cfg = settings()
-    family = "fixture" if cfg.model_mode == "fixture" else "gemini"
+    family = "fixture" if cfg.model_mode == "fixture" else "api-" + hashlib.sha256(cfg.model_base_url.rstrip("/").encode()).hexdigest()[:12]
     return f"{family}:{cfg.embedding_model}:{cfg.dimensions}"
 
 
 class FixtureEmbeddings(Embeddings):
-    """Synthetic topic features, not Gemini output or learned semantic embeddings."""
+    """Synthetic topic features, not model output or learned semantic embeddings."""
     def embed_documents(self, texts):
         vectors = []
         for text in texts:
@@ -64,12 +64,8 @@ class CachedEmbeddings(Embeddings):
                     raise ValueError("recording input/model mismatch")
                 vectors = data["vectors"]
             else:
-                from langchain_google_genai import GoogleGenerativeAIEmbeddings
-                if not cfg.google_api_key.get_secret_value():
-                    raise ValueError("GOOGLE_API_KEY required for live/record mode")
-                vectors = GoogleGenerativeAIEmbeddings(model=cfg.embedding_model,
-                    google_api_key=cfg.google_api_key.get_secret_value(),
-                    output_dimensionality=cfg.dimensions).embed_documents(source)
+                from .model_api import embed
+                vectors = embed(source)
                 if cfg.model_mode == "record":
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(json.dumps({"space":space(),"texts":source,"vectors":vectors}))

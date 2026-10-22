@@ -44,28 +44,24 @@ def rerank_candidates(inputs):
                "candidates":[{k:p[k] for k in ("id","body","author_id","created_at")}
                              for p in candidates]}
     cfg = settings()
-    encoded = json.dumps({"model":inputs["model"],"prompt":PROMPT_VERSION,"data":payload},
+    encoded = json.dumps({"model":inputs["model"],"endpoint":cfg.model_base_url,"prompt":PROMPT_VERSION,"data":payload},
                          sort_keys=True,ensure_ascii=False)
     path = Path(cfg.recordings_dir)/(hashlib.sha256(encoded.encode()).hexdigest()+"-rank.json")
     if cfg.model_mode == "fixture":
-        # Synthetic ordering only. Never present this as a Gemini recording.
+        # Synthetic ordering only. Never present this as a model recording.
         return {"ordered_ids":[p["id"] for p in reversed(candidates)],"mode":"fixture","usage":{}}
     if cfg.model_mode == "replay":
         data = json.loads(path.read_text())
         if data["input"] != encoded:
             raise ValueError("recording input mismatch")
         return {**data["result"],"mode":"replay"}
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    if not cfg.google_api_key.get_secret_value():
-        raise ValueError("GOOGLE_API_KEY required for live/record mode")
-    model = ChatGoogleGenerativeAI(model=inputs["model"],temperature=0,
-        google_api_key=cfg.google_api_key.get_secret_value(),max_retries=0,timeout=30,vertexai=False)
-    response = model.with_structured_output(Ranking,method="json_schema",include_raw=True).invoke(
-        PROMPT.format_messages(payload=json.dumps(payload,ensure_ascii=False)))
-    if response.get("parsing_error") or response.get("parsed") is None:
-        raise ValueError("invalid structured output")
-    result = {"ordered_ids":response["parsed"].ordered_ids,"mode":cfg.model_mode,
-              "usage":response["raw"].usage_metadata or {}}
+    from .model_api import chat
+    messages = [{"role": {"human": "user", "ai": "assistant"}.get(m.type, m.type), "content": m.content}
+                for m in PROMPT.format_messages(payload=json.dumps(payload, ensure_ascii=False))]
+    messages[0]["content"] += ' Return only JSON: {"ordered_ids": [1, 2]}.'
+    response = chat(messages, inputs["model"])
+    parsed = Ranking.model_validate_json(response["content"])
+    result = {"ordered_ids": parsed.ordered_ids, "mode": cfg.model_mode, "usage": response["usage"]}
     if cfg.model_mode == "record":
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps({"input":encoded,"result":result},ensure_ascii=False))
