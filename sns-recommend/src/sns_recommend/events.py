@@ -1,66 +1,54 @@
-from datetime import datetime, timezone
-from typing import Literal
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Literal, Self, Any
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from psycopg.types.json import Jsonb
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+
 from . import source
-from .db import connection
-from .jobs import enqueue
+from .db import source_connection
 
 
 class Event(BaseModel):
     model_config = ConfigDict(extra="forbid")
     event_id: UUID
-    kind: Literal["post.updated", "post.deleted", "impression", "click", "like",
-                  "not_interested", "profile.updated"]
-    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    user_id: int | None = Field(default=None, gt=0)
-    post_id: int | None = Field(default=None, gt=0)
-    # Post events carry the ID and version only. The body stays in the SNS database.
-    version: int = Field(default=1, ge=1)
+    action: Literal["post.updated","post.deleted","impression","click","like","not_interested","profile.updated"]
+    occurred_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
+    user_id: int | None = Field(default=None,gt=0,le=2**63-1,strict=True)
+    post_id: int | None = Field(default=None,gt=0,le=2**63-1,strict=True)
+    version: int | None = Field(default=None,ge=1,le=2**63-1,strict=True)
 
     @model_validator(mode="after")
-    def validate_fields(self):
-        if self.kind.startswith("post."):
-            if self.post_id is None:
+    def validate_fields(self) -> Self:
+        if self.action.startswith("post."):
+            if self.post_id is None or self.version is None:
+                raise ValueError("post_id and version required")
+        else:
+            if self.user_id is None or self.version is not None:
+                raise ValueError("user_id required; version is only for post changes")
+            if self.action != "profile.updated" and self.post_id is None:
                 raise ValueError("post_id required")
-        elif self.user_id is None:
-            raise ValueError("user_id required")
-        if self.kind in {"impression", "click", "like", "not_interested"} and self.post_id is None:
-            raise ValueError("post_id required")
         return self
 
 
-def accept_event(event):
+def accept_event(event: Event) -> dict[str,bool]:
     if event.user_id is not None and not source.user_exists(event.user_id):
         raise LookupError("unknown user")
-    with connection() as conn:
-        inserted = conn.execute("""INSERT INTO events(event_id,kind,user_id,post_id,
-            occurred_at,payload) VALUES (%s,%s,%s,%s,%s,%s)
-            ON CONFLICT DO NOTHING RETURNING event_id""",
-                                (event.event_id, event.kind, event.user_id, event.post_id,
-                                 event.occurred_at, Jsonb(event.model_dump(mode="json")))).fetchone()
-        if not inserted:
-            return {"accepted": False, "duplicate": True}
-        if event.kind.startswith("post."):
-            # Skip only while work for this or a newer version is alive. A failed job never blocks.
-            covered = conn.execute("""SELECT 1 FROM jobs WHERE kind='index' AND post_id=%s
-                AND status<>'failed' AND (payload->>'version')::bigint>=%s LIMIT 1""",
-                                   (event.post_id, event.version)).fetchone()
-            if not covered:
-                # The worker reads the current post from the SNS database, then stores its vector.
-                enqueue(conn, "index", post_id=event.post_id, payload={"version": event.version})
-        elif event.kind in {"impression", "not_interested"}:
-            conn.execute("""INSERT INTO exclusions VALUES (%s,%s,%s)
-                ON CONFLICT(user_id,post_id) DO UPDATE SET reason=EXCLUDED.reason""",
-                         (event.user_id, event.post_id, event.kind))
-        elif event.kind in {"like", "click", "profile.updated"}:
-            enqueue(conn, "profile", user_id=event.user_id)  # Refresh the user vector.
-        else:
-            raise ValueError("unsupported event kind")  # A new kind must be handled explicitly.
-        return {"accepted": True, "duplicate": False}
+    with source_connection() as conn:
+        row = conn.execute(
+            """INSERT INTO recommend_events(id,action,user_id,post_id,version,created_at)
+            VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id""",
+            (event.event_id,event.action,event.user_id,event.post_id,event.version,event.occurred_at),
+        ).fetchone()
+    return {"accepted":bool(row),"duplicate":not bool(row)}
 
 
-def excluded_ids(conn, user_id):
-    rows = conn.execute("SELECT post_id FROM exclusions WHERE user_id=%s", (user_id,)).fetchall()
-    return {r["post_id"] for r in rows}
+def excluded_ids(conn: Any, user_id: int) -> set[int]:
+    # Read the original event history, including events not consumed yet.
+    with source_connection() as original:
+        rows = original.execute(
+            """SELECT DISTINCT post_id FROM recommend_events WHERE user_id=%s
+            AND action IN ('impression','not_interested') AND created_at<=now()""",(user_id,),
+        ).fetchall()
+    return {row["post_id"] for row in rows}
