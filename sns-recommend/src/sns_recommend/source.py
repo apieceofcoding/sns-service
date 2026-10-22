@@ -39,12 +39,6 @@ def current_versions(post_ids):
     return {row["id"]: row["content_version"] for row in rows}
 
 
-def interests(user_id):
-    with source_connection() as conn:
-        row = conn.execute("SELECT interests FROM user_interests WHERE user_id=%s",
-                           (user_id,)).fetchone()
-    return row["interests"] if row else None
-
 
 def recent_posts(user_id, reference, hours=48):
     from datetime import timedelta
