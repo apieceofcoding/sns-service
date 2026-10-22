@@ -8,15 +8,12 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from langchain_core.runnables import RunnableConfig
-from langgraph.checkpoint.postgres import PostgresSaver
 
 from sns_recommend.api import app
 from sns_recommend.core.config import settings
 from sns_recommend.core.measurement import CallLimitExceeded, measured_call
 from sns_recommend.core.types import (
     DatabaseConnection,
-    DatabaseRow,
     PausedResult,
     RankingInput,
     RankingResult,
@@ -25,7 +22,7 @@ from sns_recommend.data.events import Event, accept_event
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.seed import READERS
 from sns_recommend.data.source_demo import change_post
-from sns_recommend.pipelines.graph import make_graph, run_graph, start_graph
+from sns_recommend.pipelines.graph import run_graph, start_graph
 from sns_recommend.providers.embeddings import (
     CachedEmbeddings,
     FixtureEmbeddings,
@@ -34,8 +31,8 @@ from sns_recommend.providers.embeddings import (
     vector_sql,
 )
 from sns_recommend.recommenders.retrieval import retrieve_candidates, update_profile
+from sns_recommend.storage.event_queue import claim, enqueue, finish, retry
 from sns_recommend.storage.feeds import publish, read_feed
-from sns_recommend.storage.jobs import claim, enqueue, finish, retry
 from sns_recommend.storage.postgres import connection, source_connection
 from sns_recommend.worker.runner import run_one
 
@@ -52,26 +49,6 @@ def count(conn: DatabaseConnection, table: str) -> int:
     row = conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()
     assert row is not None  # COUNT always returns a row.
     return cast(int, row["n"])
-
-
-def test_event_duplicate_and_old_version_do_not_queue_work(infra: None) -> None:
-    event = Event(event_id=uuid4(), kind="post.updated", post_id=1, version=3)
-    assert accept_event(event)["accepted"]
-    assert accept_event(event)["duplicate"]
-    accept_event(event.model_copy(update={"event_id": uuid4(), "version": 2}))
-    with connection() as conn:
-        assert count(conn, "jobs") == 1
-
-
-def test_failed_index_job_does_not_block_a_redelivered_event(infra: None) -> None:
-    event = Event(event_id=uuid4(), kind="post.updated", post_id=1, version=3)
-    accept_event(event)
-    with connection() as conn:
-        conn.execute("UPDATE jobs SET status='failed'")
-    accept_event(event.model_copy(update={"event_id": uuid4()}))
-    with connection() as conn:
-        pending = conn.execute("SELECT count(*) AS n FROM jobs WHERE status='pending'").fetchone()
-    assert pending is not None and pending["n"] == 1
 
 
 def test_recommend_database_keeps_no_copy_of_posts(infra: None) -> None:
@@ -95,45 +72,6 @@ def test_recommend_database_keeps_no_copy_of_posts(infra: None) -> None:
     ]
 
 
-def test_source_outbox_commits_with_post(infra: None) -> None:
-    assert change_post(1001, "Python")["version"] == 1
-    assert change_post(1001, "Python FastAPI")["version"] == 2
-    with source_connection() as conn:
-        post = conn.execute("SELECT content,content_version FROM posts WHERE id=1001").fetchone()
-        events = conn.execute("SELECT event FROM recommend_outbox ORDER BY created_at").fetchall()
-        # The app's next generated ID must not collide with the explicit demo ID.
-        created = conn.execute(
-            """INSERT INTO posts(content,user_id,created_at,modified_at)
-            VALUES ('next',1,now(),now()) RETURNING id"""
-        ).fetchone()
-    assert post == {"content": "Python FastAPI", "content_version": 2}
-    assert [(e["event"]["post_id"], e["event"]["version"]) for e in events] == [
-        (1001, 1),
-        (1001, 2),
-    ]
-    assert all("body" not in json.dumps(e["event"]) for e in events)
-    assert created is not None and created["id"] > 1001
-
-
-def test_post_event_indexes_the_current_body_from_sns(infra: None) -> None:
-    first = change_post(1001, "Python 백엔드")
-    accept_event(Event(event_id=uuid4(), kind="post.updated", post_id=1001, version=1))
-    assert run_one()
-    change_post(1001, "제주 여행 사진")
-    # A late copy of the old event adds no work. The new event indexes the new body.
-    accept_event(Event(event_id=uuid4(), kind="post.updated", post_id=1001, version=1))
-    assert not run_one()
-    accept_event(Event(event_id=uuid4(), kind="post.updated", post_id=1001, version=2))
-    assert run_one()
-    with connection() as conn:
-        row = conn.execute(
-            "SELECT content_version,embedding::text FROM post_embeddings WHERE post_id=1001"
-        ).fetchone()
-    assert first["version"] == 1 and row is not None and row["content_version"] == 2
-    expected = FixtureEmbeddings().embed_query("제주 여행 사진")
-    assert json.loads(row["embedding"]) == pytest.approx(expected, abs=1e-6)
-
-
 def test_post_edited_during_model_call_keeps_no_stale_vector(
     infra: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -148,25 +86,6 @@ def test_post_edited_during_model_call_keeps_no_stale_vector(
     assert index_posts([1001])["indexed"] == 0
     with connection() as conn:
         assert count(conn, "post_embeddings") == 0
-
-
-def test_exclusions_delete_and_stale_vectors(infra: None) -> None:
-    prepare()
-    accept_event(Event(event_id=uuid4(), kind="impression", user_id=READER, post_id=200))
-    with source_connection() as conn:
-        conn.execute(
-            "UPDATE posts SET deleted_at=now(),content_version=content_version+1 WHERE id=195"
-        )
-        conn.execute(
-            "UPDATE posts SET content='edited',content_version=content_version+1 WHERE id=190"
-        )
-    candidates = {p["id"]: p for p in retrieve_candidates(READER, k=50)}
-    assert 200 not in candidates and 195 not in candidates
-    assert candidates[190]["similarity"] is None
-    index_posts([190, 195])
-    assert {p["id"]: p for p in retrieve_candidates(READER, k=50)}[190]["similarity"] is not None
-    with connection() as conn:
-        assert not conn.execute("SELECT 1 FROM post_embeddings WHERE post_id=195").fetchone()
 
 
 def test_old_snapshot_stays_stable_and_publish_is_idempotent(infra: None) -> None:
@@ -196,12 +115,12 @@ def test_graph_resumes_without_repeating_saved_rerank(
     monkeypatch.setattr(graph_module, "rerank_candidates", count)
     paused = cast(PausedResult, start_graph(READER, pause=True))
     assert paused["next"] == "validate"
-    job = claim(("build",), job_id=paused["job_id"])
+    job = claim(("recommend.requested",), event_id=paused["event_id"])
     assert job is not None
     result = run_graph(job)
     assert result["published"]
     assert len(calls) == 1
-    assert read_feed(READER)["snapshot_id"] == paused["job_id"]
+    assert read_feed(READER)["snapshot_id"] == paused["event_id"]
 
 
 def test_invalid_rank_uses_rule_branch(infra: None, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -214,17 +133,6 @@ def test_invalid_rank_uses_rule_branch(infra: None, monkeypatch: pytest.MonkeyPa
     assert result["strategy"] == "rules_fallback"
     assert result["published"]
     assert 99999 not in result["post_ids"]
-
-
-def test_new_generation_fences_old_graph(infra: None) -> None:
-    prepare()
-    old = start_graph(READER, pause=True)
-    with connection() as conn:
-        enqueue(conn, "build", user_id=READER)
-    resumed = claim(("build",), job_id=old["job_id"])
-    assert resumed is not None
-    assert not run_graph(resumed)["published"]
-    assert not read_feed(READER)["ready"]
 
 
 def test_read_api_does_not_call_model(infra: None, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -260,73 +168,6 @@ def test_budget_is_enforced_before_provider_call(
     with pytest.raises(CallLimitExceeded):
         measured_call("rerank", "fake", lambda: calls.append(1))
     assert len(calls) == 1
-
-
-def test_lease_ownership_blocks_late_worker(infra: None) -> None:
-    prepare()
-    with connection() as conn:
-        job_id = enqueue(conn, "build", user_id=READER)
-    old = claim(("build",), job_id=job_id)
-    assert old is not None
-    with connection() as conn:
-        conn.execute("UPDATE jobs SET owner=%s WHERE id=%s", (uuid4(), job_id))
-    with pytest.raises(RuntimeError, match="lease lost"):
-        run_graph(old)
-
-
-def test_lost_owner_cannot_change_saved_checkpoint(infra: None) -> None:
-    prepare()
-    with connection() as conn:
-        job_id = enqueue(conn, "build", user_id=READER)
-    old = claim(("build",), job_id=job_id)
-    assert old is not None
-    assert cast(PausedResult, run_graph(old, pause=True))["paused"]
-    current = claim(("build",), job_id=job_id)
-    assert current is not None
-    config: RunnableConfig = {"configurable": {"thread_id": job_id}}
-    with PostgresSaver.from_conn_string(settings().database_url) as saver:
-        graph = make_graph(saver)
-        before = graph.get_state(config)
-        with pytest.raises(RuntimeError, match="lease lost"):
-            run_graph(old)
-        after = graph.get_state(config)
-        assert before.config == after.config
-        assert before.values == after.values
-    assert run_graph(current)["published"]
-
-
-def test_crashed_jobs_stop_after_retry_limit(infra: None) -> None:
-    with connection() as conn:
-        job_id = enqueue(conn, "index", post_id=1)
-    for attempt in range(1, 4):
-        claimed = claim(("index",), job_id=job_id)
-        assert claimed is not None
-        assert claimed["attempts"] == attempt
-        with connection() as conn:
-            conn.execute(
-                "UPDATE jobs SET lease_until=now()-interval '1 second' WHERE id=%s", (job_id,)
-            )
-    assert claim(("index",), job_id=job_id) is None
-    with connection() as conn:
-        row = conn.execute("SELECT status,attempts FROM jobs WHERE id=%s", (job_id,)).fetchone()
-    assert row == {"status": "failed", "attempts": 3}
-
-
-def test_retry_does_not_reopen_finished_job(infra: None) -> None:
-    with connection() as conn:
-        job_id = enqueue(conn, "index", post_id=1)
-    job = claim(("index",), job_id=job_id)
-    assert job is not None
-    finish(job)
-    retry(job, "metrics unavailable")
-    with connection() as conn:
-        assert (
-            cast(
-                DatabaseRow,
-                conn.execute("SELECT status FROM jobs WHERE id=%s", (job_id,)).fetchone(),
-            )["status"]
-            == "done"
-        )
 
 
 def test_embedding_record_replays_full_request_from_cold_cache(
@@ -378,7 +219,7 @@ def test_profile_uses_recent_actions_instead_of_largest_post_ids(infra: None) ->
         accept_event(
             Event(
                 event_id=uuid4(),
-                kind="like",
+                action="like",
                 user_id=READER,
                 post_id=i + 1,
                 occurred_at=now - timedelta(minutes=i + 1),
@@ -435,29 +276,6 @@ def test_candidate_merge_keeps_fresh_and_popular_posts(infra: None) -> None:
     assert "popular" in by_id[1002]["sources"]
 
 
-def test_function_generation_rejects_superseded_result_and_labels_replay(
-    infra: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from sns_recommend.pipelines.generation import generate
-
-    candidate = {"id": 1, "author_id": 10, "topic": "backend"}
-    monkeypatch.setattr(
-        "sns_recommend.pipelines.generation.prepare_inputs",
-        lambda user_id: {"candidates": [candidate]},
-    )
-
-    def supersede(inputs: RankingInput) -> RankingResult:
-        with connection() as conn:
-            enqueue(conn, "build", user_id=READER)
-        return {"ordered_ids": [1], "mode": "replay", "usage": {}}
-
-    monkeypatch.setattr("sns_recommend.pipelines.generation.rerank_candidates", supersede)
-    result = generate(READER)
-    assert result["strategy"] == "replay_llm"
-    assert not result["published"]
-    assert not read_feed(READER)["ready"]
-
-
 def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -> None:
     from sns_recommend.post_examples import post_created_at
 
@@ -474,88 +292,295 @@ def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -
     assert ids == set(range(7, 19))
 
 
-def test_event_worker_delivers_without_fastapi(infra: None) -> None:
-    from sns_recommend.event_worker import poll_once
-
-    change_post(1001, "Python batch")
-    assert poll_once() == {"delivered": 1}
-    assert poll_once() == {"delivered": 0}
-    with connection() as conn:
-        assert count(conn, "events") == 1
-        assert count(conn, "jobs") == 1
+def test_source_schema_has_exactly_nine_event_columns(infra: None) -> None:
     with source_connection() as conn:
-        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
-        assert row is not None and row["delivered_at"] is not None
-
-
-def test_event_worker_replays_after_source_ack_transaction_rolls_back(
-    infra: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from collections.abc import Iterator
-    from contextlib import contextmanager
-
-    from sns_recommend import event_worker
-
-    change_post(1001, "Python replay")
-
-    @contextmanager
-    def interrupted_source() -> Iterator[DatabaseConnection]:
-        with source_connection() as conn:
-            yield conn
-            raise RuntimeError("source acknowledgement interrupted")
-
-    with monkeypatch.context() as patch:
-        patch.setattr(event_worker, "source_connection", interrupted_source)
-        with pytest.raises(RuntimeError):
-            event_worker.poll_once()
-    with source_connection() as conn:
-        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
-        assert row is not None and row["delivered_at"] is None
-    assert event_worker.poll_once() == {"delivered": 1}
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name='recommend_events'"
+        ).fetchall()
+    assert {r["column_name"] for r in rows} == {
+        "id",
+        "action",
+        "user_id",
+        "post_id",
+        "version",
+        "created_at",
+        "claim_id",
+        "locked_until",
+        "processed_at",
+    }
     with connection() as conn:
-        assert count(conn, "events") == 1
-        assert count(conn, "jobs") == 1
+        rows = conn.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
+        ).fetchall()
+    assert not {"events", "jobs", "exclusions", "posts", "users"} & {r["table_name"] for r in rows}
 
 
-def test_event_worker_skips_events_locked_by_another_consumer(infra: None) -> None:
-    from sns_recommend.event_worker import poll_once
-
-    change_post(1001, "Python locked")
-    change_post(1002, "Python free")
+def test_actual_post_changes_increment_version_and_record_event_atomically(infra: None) -> None:
     with source_connection() as conn:
-        conn.execute("SELECT id FROM recommend_outbox WHERE event->>'post_id'='1001' FOR UPDATE")
-        assert poll_once() == {"delivered": 1}
-    assert poll_once() == {"delivered": 1}
-    with connection() as conn:
-        assert count(conn, "events") == 2
-
-
-def test_event_worker_limits_work_per_poll(infra: None) -> None:
-    from sns_recommend.event_worker import poll_once
-
-    change_post(1001, "Python first")
-    change_post(1002, "Python second")
-    assert poll_once(1) == {"delivered": 1}
-    assert poll_once(1) == {"delivered": 1}
-    assert poll_once(1) == {"delivered": 0}
-
-
-def test_event_worker_keeps_outbox_pending_when_event_processing_fails(
-    infra: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from sns_recommend import event_worker
-
-    change_post(1001, "Python failed")
-
-    def unavailable(event: Event) -> None:
-        raise RuntimeError("recommend database unavailable")
-
-    monkeypatch.setattr(event_worker, "accept_event", unavailable)
+        conn.execute("UPDATE posts SET content='changed from SNS SQL' WHERE id=1")
+        row = conn.execute("SELECT content_version FROM posts WHERE id=1").fetchone()
+        assert row["content_version"] == 2
+        event = conn.execute("SELECT * FROM recommend_events WHERE post_id=1").fetchone()
+        assert event["action"] == "post.updated" and event["version"] == 2
     with pytest.raises(RuntimeError):
-        event_worker.poll_once()
+        with source_connection() as conn:
+            conn.execute("UPDATE posts SET content='rollback' WHERE id=1")
+            raise RuntimeError("rollback")
     with source_connection() as conn:
-        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
-        assert row is not None and row["delivered_at"] is None
+        assert (
+            conn.execute("SELECT count(*) AS n FROM recommend_events WHERE post_id=1").fetchone()[
+                "n"
+            ]
+            == 1
+        )
+        conn.execute("UPDATE posts SET like_count=like_count+1 WHERE id=1")
+        assert (
+            conn.execute("SELECT content_version FROM posts WHERE id=1").fetchone()[
+                "content_version"
+            ]
+            == 2
+        )
+        conn.execute("UPDATE posts SET deleted_at=now() WHERE id=1")
+        assert (
+            conn.execute("SELECT content_version FROM posts WHERE id=1").fetchone()[
+                "content_version"
+            ]
+            == 3
+        )
+
+
+def test_event_worker_indexes_only_latest_version_without_api(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
+
+    change_post(1001, "Python old")
+    change_post(1001, "Python latest")
+    assert poll_once() == {"processed": 2}
+    assert poll_once() == {"processed": 0}
     with connection() as conn:
-        assert count(conn, "events") == 0
-        assert count(conn, "jobs") == 0
+        assert (
+            conn.execute(
+                "SELECT content_version FROM post_embeddings WHERE post_id=1001"
+            ).fetchone()["content_version"]
+            == 2
+        )
+    with source_connection() as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) AS n FROM recommend_events WHERE processed_at IS NOT NULL"
+            ).fetchone()["n"]
+            == 2
+        )
+
+
+def test_duplicate_action_is_recorded_once_and_remains_available_after_processing(
+    infra: None,
+) -> None:
+    from sns_recommend.event_worker import poll_once
+
+    event = Event(event_id=uuid4(), action="like", user_id=READER, post_id=1)
+    assert accept_event(event)["accepted"]
+    assert accept_event(event)["duplicate"]
+    assert poll_once() == {"processed": 1}
+    with source_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM recommend_events WHERE id=%s", (event.event_id,)
+        ).fetchone()
+        assert row["processed_at"] is not None and row["action"] == "like"
+
+
+def test_failure_remains_retryable_without_an_extra_jobs_table(
+    infra: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sns_recommend import event_worker
+
+    change_post(1001, "Python retry")
+    original = event_worker.handle
+
+    def fail(event: object) -> None:
+        raise RuntimeError("storage unavailable")
+
+    monkeypatch.setattr(event_worker, "handle", fail)
+    assert event_worker.poll_once() == {"processed": 0}
+    with source_connection() as conn:
+        assert (
+            conn.execute("SELECT processed_at FROM recommend_events").fetchone()["processed_at"]
+            is None
+        )
+        conn.execute("UPDATE recommend_events SET locked_until=now()-interval '1 second'")
+    monkeypatch.setattr(event_worker, "handle", original)
+    assert event_worker.poll_once() == {"processed": 1}
+
+
+def test_old_claim_cannot_acknowledge_or_renew_reclaimed_event(infra: None) -> None:
+    from sns_recommend.storage.event_queue import renew
+
+    change_post(1001, "Python claim")
+    old = claim(("post.updated",))
+    assert old is not None
+    assert claim(("post.updated",)) is None
+    with source_connection() as conn:
+        conn.execute("UPDATE recommend_events SET locked_until=now()-interval '1 second'")
+    new = claim(("post.updated",))
+    assert new is not None and old["claim_id"] != new["claim_id"]
+    assert not finish(old)
+    with pytest.raises(RuntimeError):
+        renew(old)
+    assert finish(new)
+    retry(old)
+    assert claim(("post.updated",)) is None
+
+
+def test_vector_commit_before_ack_is_safe_to_repeat(infra: None) -> None:
+    from sns_recommend.event_worker import handle, poll_once
+
+    change_post(1001, "Python commit")
+    event = claim(("post.updated",))
+    assert event is not None
+    handle(event)
+    with source_connection() as conn:
+        conn.execute("UPDATE recommend_events SET locked_until=now()-interval '1 second'")
+    assert poll_once() == {"processed": 1}
+    with connection() as conn:
+        assert count(conn, "post_embeddings") == 1
+
+
+def test_locked_event_is_skipped_and_each_claim_is_bounded(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
+
+    change_post(1001, "first")
+    change_post(1002, "second")
+    with source_connection() as conn:
+        conn.execute("SELECT * FROM recommend_events WHERE post_id=1001 FOR UPDATE")
+        assert poll_once(1) == {"processed": 1}
+    assert poll_once(1) == {"processed": 1}
+
+
+def test_delete_event_removes_vector_without_embedding_call(
+    infra: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sns_recommend.event_worker import poll_once
+
+    index_posts([1])
+    with source_connection() as conn:
+        conn.execute("UPDATE posts SET deleted_at=now() WHERE id=1")
+    monkeypatch.setattr(
+        CachedEmbeddings,
+        "embed_documents",
+        lambda *args: pytest.fail("deleted post called embedding"),
+    )
+    assert poll_once() == {"processed": 1}
+    with connection() as conn:
+        assert count(conn, "post_embeddings") == 0
+
+
+def test_recommend_request_is_deduplicated_until_claimed(infra: None) -> None:
+    first = enqueue("recommend.requested", READER)
+    assert enqueue("recommend.requested", READER) == first
+    event = claim(("recommend.requested",))
+    assert event is not None
+    assert enqueue("recommend.requested", READER) != first
+
+
+def test_new_generation_fences_old_graph(infra: None) -> None:
+    prepare()
+    old = start_graph(READER, pause=True)
+    new = start_graph(READER)
+    current = claim(("recommend.requested",), event_id=old["event_id"])
+    assert current is not None
+    assert not run_graph(current)["published"]
+    assert read_feed(READER)["snapshot_id"] == new["event_id"]
+
+
+def test_request_scheduler_and_read_refresh_use_same_event_table(infra: None) -> None:
+    from sns_recommend.worker.scheduler import schedule_active
+
+    result = TestClient(app).get(f"/internal/feeds/{READER}")
+    assert result.status_code == 200 and result.json()["refresh_event"]
+    assert schedule_active() == {"scheduled": 0}
+    assert run_one()
+    assert read_feed(READER)["ready"]
+
+
+def test_existing_history_and_work_migrate_without_data_loss(infra: None) -> None:
+    from sns_recommend.storage.postgres import initialize
+
+    history_id = uuid4()
+    request_id = uuid4()
+    with connection() as conn:
+        conn.execute(
+            "CREATE TABLE events(event_id uuid PRIMARY KEY,kind text,user_id bigint,post_id bigint,occurred_at timestamptz,payload jsonb)"
+        )
+        conn.execute("INSERT INTO events VALUES (%s,'like',7,1,now(),'{}')", (history_id,))
+        conn.execute(
+            "CREATE TABLE jobs(id uuid PRIMARY KEY,kind text,user_id bigint,post_id bigint,status text,payload jsonb,created_at timestamptz)"
+        )
+        conn.execute(
+            "INSERT INTO jobs VALUES (%s,'build',7,NULL,'pending','{}',now())", (request_id,)
+        )
+        conn.execute("CREATE TABLE exclusions(user_id bigint,post_id bigint,reason text)")
+        conn.execute("INSERT INTO exclusions VALUES (7,2,'not_interested')")
+    initialize()
+    initialize()
+    with source_connection() as conn:
+        row = conn.execute(
+            "SELECT action FROM recommend_events WHERE id=%s", (history_id,)
+        ).fetchone()
+        assert row["action"] == "like"
+        row = conn.execute(
+            "SELECT action FROM recommend_events WHERE id=%s", (request_id,)
+        ).fetchone()
+        assert row["action"] == "recommend.requested"
+        assert (
+            conn.execute(
+                "SELECT count(*) AS n FROM recommend_events WHERE action='not_interested'"
+            ).fetchone()["n"]
+            == 1
+        )
+    with connection() as conn:
+        assert conn.execute("SELECT to_regclass('events') AS name").fetchone()["name"] is None
+        assert conn.execute("SELECT to_regclass('jobs') AS name").fetchone()["name"] is None
+
+
+def test_failed_event_does_not_block_the_next_event(
+    infra: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sns_recommend import event_worker
+
+    change_post(1001, "failed")
+    change_post(1002, "healthy")
+    original = event_worker.handle
+
+    def handle(event: dict) -> None:
+        if event["post_id"] == 1001:
+            raise RuntimeError("bad input")
+        original(event)
+
+    monkeypatch.setattr(event_worker, "handle", handle)
+    assert event_worker.poll_once(2) == {"processed": 1}
+    with connection() as conn:
+        assert conn.execute("SELECT post_id FROM post_embeddings").fetchone()["post_id"] == 1002
+
+
+def test_current_interests_and_change_event_have_different_roles(infra: None) -> None:
+    from sns_recommend.event_worker import poll_once
+
+    with source_connection() as conn:
+        conn.execute("UPDATE user_interests SET interests='제주 여행' WHERE user_id=%s", (READER,))
+        event = conn.execute(
+            "SELECT * FROM recommend_events WHERE action='profile.updated'"
+        ).fetchone()
+        assert event["user_id"] == READER and event["version"] is None
+        assert (
+            conn.execute(
+                "SELECT interests FROM user_interests WHERE user_id=%s", (READER,)
+            ).fetchone()["interests"]
+            == "제주 여행"
+        )
+    assert poll_once() == {"processed": 1}
+    with source_connection() as conn:
+        assert (
+            conn.execute(
+                "SELECT count(*) AS n FROM recommend_events WHERE action='recommend.requested'"
+            ).fetchone()["n"]
+            == 1
+        )

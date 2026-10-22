@@ -12,11 +12,11 @@ from sns_recommend.data.events import Event
 
 
 def test_event_requires_its_target() -> None:
-    assert Event(event_id=uuid4(), kind="post.updated", post_id=3, version=2).version == 2
+    assert Event(event_id=uuid4(), action="post.updated", post_id=3, version=2).version == 2
     with pytest.raises(ValidationError):
-        Event(event_id=uuid4(), kind="post.updated", version=2)
+        Event(event_id=uuid4(), action="post.updated", version=2)
     with pytest.raises(ValidationError):
-        Event(event_id=uuid4(), kind="like", user_id=1)
+        Event(event_id=uuid4(), action="like", user_id=1)
 
 
 @pytest.mark.parametrize(
@@ -33,7 +33,7 @@ def test_event_requires_its_target() -> None:
     ],
 )
 def test_invalid_events_are_rejected(changes: dict[str, object]) -> None:
-    event = {"event_id": uuid4(), "kind": "post.updated", "post_id": 3}
+    event = {"event_id": uuid4(), "action": "post.updated", "post_id": 3, "version": 1}
     with pytest.raises(ValidationError):
         Event.model_validate({**event, **changes})
 
@@ -48,7 +48,7 @@ def test_event_with_content_never_reaches_database(monkeypatch: pytest.MonkeyPat
 
         json={
             "event_id": str(uuid4()),
-            "kind": "profile.updated",
+            "action": "profile.updated",
             "user_id": 1,
             "payload": {"interests": ["Python"]},
         },

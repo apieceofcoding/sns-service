@@ -13,9 +13,9 @@ from sns_recommend.core.types import Candidate, DatabaseRow, GenerationResult
 from sns_recommend.data.events import excluded_ids
 from sns_recommend.providers.embeddings import CachedEmbeddings, normalize, space, vector_sql
 from sns_recommend.storage import source
+from sns_recommend.storage.event_queue import allocate_generation, current_generation, enqueue
 from sns_recommend.storage.feeds import publish
-from sns_recommend.storage.jobs import allocate_generation, current_generation, enqueue
-from sns_recommend.storage.postgres import connection
+from sns_recommend.storage.postgres import connection, source_connection
 
 
 def interests_hash(interests: str) -> str:
@@ -28,15 +28,22 @@ def update_profile(user_id: int) -> dict[str, int]:
     interests = source.interests(user_id)
     if not interests:
         return {"user_id": user_id}  # No stated interests yet: latest and popular only.
+    with source_connection() as conn:
+        reacted = conn.execute(
+            """SELECT post_id FROM recommend_events WHERE user_id=%s AND action IN ('like','click')
+            AND created_at<=now() AND created_at>now()-interval '7 days'
+            GROUP BY post_id ORDER BY max(created_at) DESC,post_id DESC LIMIT 20""",
+            (user_id,),
+        ).fetchall()
+    recent_ids = [r["post_id"] for r in reacted]
     with connection() as conn:
         reacted = conn.execute(
-            """SELECT p.post_id,p.content_version,p.embedding::text FROM events e
-            JOIN post_embeddings p ON p.post_id=e.post_id
-            WHERE e.user_id=%s AND e.kind IN ('like','click') AND p.space=%s
-            AND e.occurred_at<=now() AND e.occurred_at>now()-interval '7 days'
-            GROUP BY p.post_id ORDER BY max(e.occurred_at) DESC,p.post_id DESC LIMIT 20""",
-            (user_id, space()),
+            """SELECT post_id,content_version,embedding::text FROM post_embeddings
+            WHERE post_id=ANY(%s) AND space=%s""",
+            ([r["post_id"] for r in reacted], space()),
         ).fetchall()
+    by_id = {r["post_id"]: r for r in reacted}
+    reacted = [by_id[i] for i in recent_ids if i in by_id]
     # Use a reaction only while its post is visible and the vector matches the current body.
     versions = source.current_versions([r["post_id"] for r in reacted])
     positives = [r for r in reacted if versions.get(r["post_id"]) == r["content_version"]][:5]
@@ -168,5 +175,4 @@ def generate_embedding(user_id: int) -> GenerationResult:
 
 def process_profile(user_id: int) -> None:
     update_profile(user_id)
-    with connection() as conn:
-        enqueue(conn, "build", user_id=user_id)
+    enqueue("recommend.requested", user_id)

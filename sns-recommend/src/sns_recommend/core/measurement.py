@@ -81,15 +81,17 @@ def measured_call(kind: str, model: str, fn: Callable[[], T]) -> T:
     return result
 
 
-def record_generation(job_id: UUID | str, duration_ms: float, result: Mapping[str, object]) -> None:
+def record_generation(
+    event_id: UUID | str, duration_ms: float, result: Mapping[str, object]
+) -> None:
     with connection() as conn:
         conn.execute(
-            """INSERT INTO generation_runs(job_id,mode,duration_ms,strategy,published)
-            VALUES (%s,%s,%s,%s,%s) ON CONFLICT(job_id) DO UPDATE SET
+            """INSERT INTO generation_runs(event_id,mode,duration_ms,strategy,published)
+            VALUES (%s,%s,%s,%s,%s) ON CONFLICT(event_id) DO UPDATE SET
             duration_ms=EXCLUDED.duration_ms,strategy=EXCLUDED.strategy,
             published=EXCLUDED.published,updated_at=now()""",
             (
-                job_id,
+                event_id,
                 settings().model_mode,
                 duration_ms,
                 result.get("strategy"),

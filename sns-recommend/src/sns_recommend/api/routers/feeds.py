@@ -8,7 +8,7 @@ from sns_recommend.core.types import FeedResponse
 from sns_recommend.data.events import excluded_ids
 from sns_recommend.storage import source
 from sns_recommend.storage.feeds import MAX_CURSOR_LENGTH, read_feed
-from sns_recommend.storage.jobs import enqueue
+from sns_recommend.storage.event_queue import enqueue
 from sns_recommend.storage.postgres import connection
 
 router = APIRouter(prefix="/feeds", tags=["feeds"])
@@ -34,7 +34,7 @@ def feed(
                 (user_id,),
             )
             if not result["ready"] or result.get("stale") or not result["next_cursor"]:
-                result["refresh_job"] = enqueue(conn, "build", user_id=user_id, throttle=True)
+                result["refresh_event"] = enqueue("recommend.requested", user_id, throttle=True)
         return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

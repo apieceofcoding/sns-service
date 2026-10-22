@@ -1623,19 +1623,19 @@
   "actions": [
     {
       "user_id": 1,
-      "kind": "like",
+      "action": "like",
       "post_id": 5,
       "at": "2026-10-04T01:40:00+00:00"
     },
     {
       "user_id": 2,
-      "kind": "like",
+      "action": "like",
       "post_id": 1,
       "at": "2026-10-04T01:40:00+00:00"
     },
     {
       "user_id": 3,
-      "kind": "like",
+      "action": "like",
       "post_id": 2,
       "at": "2026-10-04T01:40:00+00:00"
     }

@@ -1,4 +1,4 @@
-"""Shared contracts for recommend inputs, outputs and stored jobs."""
+"""Shared contracts for recommend inputs, outputs and stored events."""
 
 from datetime import datetime
 from typing import Any, Literal, NotRequired, TypedDict
@@ -9,8 +9,6 @@ from psycopg import Connection
 type DatabaseRow = dict[str, Any]
 type DatabaseConnection = Connection[DatabaseRow]
 type ModelMode = Literal["fixture", "live", "record", "replay"]
-type JobKind = Literal["index", "profile", "build"]
-type JobStatus = Literal["pending", "running", "done", "failed", "superseded"]
 
 
 class Candidate(TypedDict):
@@ -26,7 +24,7 @@ class Candidate(TypedDict):
 
 
 class Action(TypedDict):
-    kind: str
+    action: str
     post_id: int
     user_id: NotRequired[int]
     at: NotRequired[str]
@@ -62,7 +60,7 @@ class FeedResponse(TypedDict):
     strategy: NotRequired[str]
     created_at: NotRequired[float]
     stale: NotRequired[bool]
-    refresh_job: NotRequired[str | None]
+    refresh_event: NotRequired[str | None]
 
 
 class GenerationResult(TypedDict):
@@ -72,12 +70,12 @@ class GenerationResult(TypedDict):
 
 
 class GraphResult(GenerationResult):
-    job_id: str
+    event_id: str
 
 
 class PausedResult(TypedDict):
     paused: Literal[True]
-    job_id: str
+    event_id: str
     next: str
 
 
@@ -86,20 +84,16 @@ class EventResult(TypedDict):
     duplicate: bool
 
 
-class Job(TypedDict):
+class EventRecord(TypedDict):
     id: UUID
-    kind: JobKind
+    action: str
     user_id: int | None
     post_id: int | None
-    generation: int
-    payload: dict[str, Any]
-    status: JobStatus
-    attempts: int
-    available_at: datetime
-    lease_until: datetime | None
-    owner: UUID | None
-    error: str | None
+    version: int | None
     created_at: datetime
+    claim_id: UUID | None
+    locked_until: datetime | None
+    processed_at: datetime | None
 
 
 class IndexResult(TypedDict):

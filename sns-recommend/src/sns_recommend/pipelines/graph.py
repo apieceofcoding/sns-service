@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any, Literal, TypedDict, overload
 
@@ -12,21 +12,35 @@ from langgraph.graph.state import CompiledStateGraph
 
 from sns_recommend.core.config import settings
 from sns_recommend.core.measurement import record_generation
-from sns_recommend.core.types import GraphResult, Job, PausedResult, RankingInput, RankingResult
+from sns_recommend.core.types import (
+    EventRecord,
+    GraphResult,
+    PausedResult,
+    RankingInput,
+    RankingResult,
+)
 from sns_recommend.pipelines.generation import prepare_inputs
 from sns_recommend.providers.rerank import ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
+from sns_recommend.storage.event_queue import (
+    allocate_generation,
+    claim,
+    current_generation,
+    enqueue,
+    finish,
+    heartbeat,
+    renew,
+)
 from sns_recommend.storage.feeds import publish
-from sns_recommend.storage.jobs import claim, current_generation, enqueue, finish
-from sns_recommend.storage.postgres import connection
+from sns_recommend.storage.postgres import connection, source_connection
 
-GRAPH_VERSION = "sns-feed-v1"
+GRAPH_VERSION = "sns-feed-v2"
 
 
 class FeedState(TypedDict, total=False):
     user_id: int
-    job_id: str
-    owner: str
+    event_id: str
+    claim_id: str
     generation: int
     snapshot_id: str
     created_at: float
@@ -41,18 +55,7 @@ class FeedState(TypedDict, total=False):
 
 
 def guard(state: FeedState) -> None:
-    with connection() as conn:
-        row = conn.execute(
-            """UPDATE jobs SET lease_until=%s WHERE id=%s AND owner=%s
-            AND status='running' AND lease_until>now() RETURNING id""",
-            (
-                datetime.now(UTC) + timedelta(seconds=settings().lease_seconds),
-                state["job_id"],
-                state["owner"],
-            ),
-        ).fetchone()
-        if not row:
-            raise RuntimeError("job lease lost")
+    renew({"id": state["event_id"], "claim_id": state["claim_id"]})
 
 
 def make_graph(
@@ -101,29 +104,31 @@ def make_graph(
 
     def publish_feed(state: FeedState) -> FeedState:
         guard(state)
-        with connection() as conn:
-            generation = current_generation(conn, state["user_id"])
-            job = conn.execute(
-                "SELECT * FROM jobs WHERE id=%s FOR UPDATE", (state["job_id"],)
+        with source_connection() as original:
+            event = original.execute(
+                "SELECT * FROM recommend_events WHERE id=%s FOR UPDATE", (state["event_id"],)
             ).fetchone()
             if (
-                job is None
-                or generation != state["generation"]
-                or str(job["owner"]) != state["owner"]
-                or job["status"] != "running"
-                or job["lease_until"] <= datetime.now(UTC)
-                or datetime.now(UTC).timestamp() - state["created_at"] > settings().snapshot_ttl
+                event is None
+                or str(event["claim_id"]) != state["claim_id"]
+                or event["processed_at"] is not None
+                or event["locked_until"] <= datetime.now(UTC)
             ):
                 return {"published": False}
-            # Enqueue takes the same user lock, so it cannot invalidate this generation mid-publish.
-            published = publish(
-                state["user_id"],
-                state["ordered"],
-                state["strategy"],
-                state["generation"],
-                state["snapshot_id"],
-                state["created_at"],
-            )
+            with connection() as conn:
+                if (
+                    current_generation(conn, state["user_id"]) != state["generation"]
+                    or datetime.now(UTC).timestamp() - state["created_at"] > settings().snapshot_ttl
+                ):
+                    return {"published": False}
+                published = publish(
+                    state["user_id"],
+                    state["ordered"],
+                    state["strategy"],
+                    state["generation"],
+                    state["snapshot_id"],
+                    state["created_at"],
+                )
         return {"published": published}
 
     builder = StateGraph(FeedState)
@@ -147,55 +152,55 @@ def make_graph(
 
 
 @overload
-def run_graph(job: Job, pause: Literal[False] = False) -> GraphResult: ...
+def run_graph(event: EventRecord, pause: Literal[False] = False) -> GraphResult: ...
 
 
 @overload
-def run_graph(job: Job, pause: bool) -> GraphResult | PausedResult: ...
+def run_graph(event: EventRecord, pause: bool) -> GraphResult | PausedResult: ...
 
 
-def run_graph(job: Job, pause: bool = False) -> GraphResult | PausedResult:
-    if job["user_id"] is None:
-        raise ValueError("build job requires user_id")
+def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedResult:
+    if event["user_id"] is None:
+        raise ValueError("recommend.requested requires user_id")
     started = perf_counter()
-    # Check ownership before changing the checkpoint's owner or saved state.
-    guard({"job_id": str(job["id"]), "owner": str(job["owner"])})
+    guard({"event_id": str(event["id"]), "claim_id": str(event["claim_id"])})
     with PostgresSaver.from_conn_string(settings().database_url) as saver:
         saver.setup()
         graph = make_graph(saver, pause)
-        config: RunnableConfig = {"configurable": {"thread_id": str(job["id"])}}
+        config: RunnableConfig = {"configurable": {"thread_id": "recommend:" + str(event["id"])}}
         saved = graph.get_state(config)
         if saved.values:
             if saved.values["graph_version"] != GRAPH_VERSION:
                 raise ValueError("unsupported graph version")
-            # Lease owner changes after process restart. Persist the new owner before resuming.
-            graph.update_state(config, {"owner": str(job["owner"])}, as_node=None)
+            graph.update_state(config, {"claim_id": str(event["claim_id"])}, as_node=None)
             result = graph.invoke(None, config)
         else:
+            with connection() as conn:
+                generation = allocate_generation(conn, event["user_id"])
             result = graph.invoke(
                 {
-                    "user_id": job["user_id"],
-                    "job_id": str(job["id"]),
-                    "owner": str(job["owner"]),
-                    "generation": job["generation"],
-                    "snapshot_id": str(job["id"]),
-                    "created_at": job["created_at"].timestamp(),
+                    "user_id": event["user_id"],
+                    "event_id": str(event["id"]),
+                    "claim_id": str(event["claim_id"]),
+                    "generation": generation,
+                    "snapshot_id": str(event["id"]),
+                    "created_at": event["created_at"].timestamp(),
                     "graph_version": GRAPH_VERSION,
                 },
                 config,
             )
         if graph.get_state(config).next:
-            with connection() as conn:
+            with source_connection() as conn:
                 conn.execute(
-                    """UPDATE jobs SET lease_until=now() WHERE id=%s AND owner=%s
-                    AND status='running'""",
-                    (job["id"], job["owner"]),
+                    "UPDATE recommend_events SET locked_until=now() WHERE id=%s AND claim_id=%s",
+                    (event["id"], event["claim_id"]),
                 )
-            return {"paused": True, "job_id": str(job["id"]), "next": "validate"}
-    finish(job, "done" if result.get("published") else "superseded")
-    record_generation(job["id"], (perf_counter() - started) * 1000, result)
+            return {"paused": True, "event_id": str(event["id"]), "next": "validate"}
+    if not finish(event):
+        raise RuntimeError("event lease lost")
+    record_generation(event["id"], (perf_counter() - started) * 1000, result)
     return {
-        "job_id": str(job["id"]),
+        "event_id": str(event["id"]),
         "strategy": result["strategy"],
         "post_ids": result["ordered"],
         "published": result.get("published", False),
@@ -211,9 +216,12 @@ def start_graph(user_id: int, pause: bool) -> GraphResult | PausedResult: ...
 
 
 def start_graph(user_id: int, pause: bool = False) -> GraphResult | PausedResult:
-    with connection() as conn:
-        job_id = enqueue(conn, "build", user_id=user_id)
-    job = claim(("build",), job_id=job_id)
-    if job is None:
-        raise RuntimeError("job already owned by a worker")
-    return run_graph(job, pause)
+    event_id = enqueue("recommend.requested", user_id)
+    event = claim(("recommend.requested",), event_id=event_id)
+    if event is None:
+        raise RuntimeError("event already owned by a worker")
+    if pause:
+        return run_graph(event, pause)
+    with heartbeat(event):
+        result = run_graph(event)
+    return result

@@ -8,35 +8,24 @@ import time
 import psycopg
 from redis.exceptions import RedisError
 
-from sns_recommend.data.indexing import index_posts
 from sns_recommend.pipelines.graph import run_graph
-from sns_recommend.recommenders.retrieval import process_profile
-from sns_recommend.storage.jobs import claim, finish, retry
+from sns_recommend.storage.event_queue import claim, heartbeat, retry
 from sns_recommend.worker.scheduler import schedule_active
 
 logger = logging.getLogger(__name__)
 
 
 def run_one() -> bool:
-    job = claim()
-    if not job:
+    event = claim(("recommend.requested",))
+    if event is None:
         return False
     try:
-        if job["kind"] == "index":
-            if job["post_id"] is None:
-                raise ValueError("index job requires post_id")
-            index_posts([job["post_id"]])
-        elif job["kind"] == "build":
-            run_graph(job)
-            return True
-        else:
-            if job["user_id"] is None:
-                raise ValueError("profile job requires user_id")
-            process_profile(job["user_id"])
-        finish(job)
+        with heartbeat(event):
+            run_graph(event)
+
     except Exception as exc:
-        logger.warning("Job %s (%s) failed: %s", job["id"], job["kind"], type(exc).__name__)
-        retry(job, type(exc).__name__)
+        logger.warning("Event %s failed: %s", event["id"], type(exc).__name__)
+        retry(event)
     return True
 
 
@@ -60,3 +49,7 @@ def main() -> None:
                 processed = False
             if not processed:
                 time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()

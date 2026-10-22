@@ -42,6 +42,9 @@ def infra(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         if keys:
             r.delete(*keys)
         seed()
+        from sns_recommend.storage.postgres import source_connection
+        with source_connection() as source:
+            source.execute("DELETE FROM recommend_events")
         yield
     finally:
         try:

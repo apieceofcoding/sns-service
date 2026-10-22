@@ -134,43 +134,36 @@ uv run sns-recommend baseline --user 10 --strategy latest
 
 [SNS 화면](http://localhost:3000)을 새로고침하고 **추천** 탭에서 게시글을 확인해요. **팔로잉** 탭은 기존 타임라인입니다. [추천 피드 API](http://localhost:8080/api/v1/recommend)에서도 `mode: recommend`와 `posts`를 확인할 수 있습니다.
 
-### part-3. 이벤트 전달
+### part-3. 변경 수집과 검색 데이터 준비
+
+아래 [모델 설정](#모델-설정)의 Ollama를 먼저 준비합니다.
 
 ```sh
-git switch part-3-events
+git switch part-3-events-indexing
 uv sync --locked
 docker compose up -d --wait
-uv run sns-recommend init
-uv run sns-recommend source-post --post 1001
-uv run sns-recommend-event-worker --once
-```
-
-`delivered: 1`을 확인해요. 다시 실행하면 `0`입니다. `init`은 기존 데이터를 유지해요.
-
-```sh
-# 별도 터미널에서 실행: 3초마다 Outbox 조회, Ctrl+C로 종료
-uv run sns-recommend-event-worker
-```
-
-이벤트 워커는 FastAPI와 별도 프로세스입니다. 이벤트와 작업을 저장한 뒤 전달 완료를 표시해요.
-
-### part-4. 게시글 색인
-
-처음에는 아래 [모델 설정](#모델-설정)의 Ollama 준비 명령을 실행합니다.
-
-```sh
-git switch part-4-indexing
-uv sync --locked
 uv run sns-recommend init
 uv run sns-recommend index
 ```
 
-게시글 벡터를 저장합니다. 다시 실행하면 `indexed: 0`이에요.
-
-### part-5. 관심사 검색
+기존 글은 한 번에 최대 20개씩 색인해요. `indexed: 0`이 될 때까지 반복합니다.
 
 ```sh
-git switch part-5-retrieval
+# 글 변경과 좋아요 기록
+uv run sns-recommend source-post --post 1001
+uv run sns-recommend action --action like --user 7 --post 1
+# 변경을 벡터에 반영하고 행동 처리 완료 표시
+uv run sns-recommend-event-worker --once
+# 별도 터미널에서 계속 처리
+uv run sns-recommend-event-worker
+```
+
+`recommend_events`에 기록한 변경을 별도 이벤트 worker가 처리해요. 처리 후 `--once`를 다시 실행하면 `processed: 0`입니다. 행동 기록은 남습니다.
+
+### part-4. 관심사 검색
+
+```sh
+git switch part-4-retrieval
 uv sync --locked
 uv run sns-recommend init
 uv run sns-recommend embedding --user 7
@@ -178,41 +171,41 @@ uv run sns-recommend embedding --user 7
 
 관심사에 맞는 추천 ID를 확인합니다.
 
-### part-6. 재정렬
+### part-5. 재정렬
 
 ```sh
-git switch part-6-reranking
+git switch part-5-reranking
 uv sync --locked
 uv run sns-recommend generate --user 7
 ```
 
 재정렬한 추천 ID를 확인해요.
 
-### part-7. LangGraph
+### part-6. LangGraph
 
 ```sh
-git switch part-7-langgraph
+git switch part-6-langgraph
 uv sync --locked
 uv run sns-recommend graph --user 7
 ```
 
 검색부터 추천 저장까지 실행합니다. 체크포인트 테이블은 자동으로 준비해요.
 
-### part-8. 품질 평가
+### part-7. 품질 평가
 
 ```sh
-git switch part-8-evaluation
+git switch part-7-evaluation
 uv sync --locked
 uv run sns-recommend evaluate
 ```
 
 `sns-recommend/reports/evaluation.json`에서 합성 데이터의 전략별 점수를 비교합니다.
 
-### part-9. 조회 측정과 자동 갱신
+### part-8. 조회 측정과 자동 갱신
 
 ```sh
 # SNS 앱 다시 빌드
-git switch part-9-resilience
+git switch part-8-resilience
 cd ../sns-app
 ./gradlew jibDockerBuild
 docker compose up -d --wait
@@ -273,7 +266,7 @@ docker compose up -d --wait  # part-2부터
 
 | 저장소 | 내용 | 연결 설정 |
 |---|---|---|
-| SNS DB (`snsdb`, 5432) | 회원과 게시글 원본, 관심사, Outbox | `SOURCE_DATABASE_URL` |
+| SNS DB (`snsdb`, 5432) | 회원과 게시글 원본, 관심사, recommend_events | `SOURCE_DATABASE_URL` |
 | 추천 DB (`recommend`, 55432) | 글 ID별 벡터, 행동, 작업과 체크포인트 | `DATABASE_URL` |
 | Redis (56379) | 완성된 추천 ID 목록 | `REDIS_URL` |
 
@@ -281,7 +274,7 @@ docker compose up -d --wait  # part-2부터
 
 ## 모델 설정
 
-기본 실습은 **최신 Ollama로 로컬 모델을 실제 호출**합니다. 외부 API 키와 사용료는 필요 없어요. 4단원부터 적용합니다.
+기본 실습은 **최신 Ollama로 로컬 모델을 실제 호출**합니다. 외부 API 키와 사용료는 필요 없어요. 3단원부터 적용합니다.
 
 ```sh
 # Ollama 설치 후 sns-recommend/에서 한 번 준비
@@ -319,4 +312,4 @@ Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 
 
 OpenAI API는 강사용 비교 선택입니다. 서버 주소, 모델명과 키를 계정에서 사용 가능한 값으로 바꿔요. 수강생 기본 실습은 OpenAI 결제를 요구하지 않습니다. 키와 녹화 파일은 Git에 넣지 않습니다.
 
-8단원은 합성 정답셋 평가, 9단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
+7단원은 합성 정답셋 평가, 8단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.

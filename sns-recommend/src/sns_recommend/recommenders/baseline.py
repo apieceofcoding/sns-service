@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sns_recommend.storage import source
 from sns_recommend.storage.feeds import publish
-from sns_recommend.storage.jobs import allocate_generation
+from sns_recommend.storage.event_queue import allocate_generation
 from sns_recommend.storage.postgres import connection
 
 
