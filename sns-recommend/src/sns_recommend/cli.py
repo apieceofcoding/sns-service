@@ -5,7 +5,7 @@ import json
 
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.seed import seed
-from sns_recommend.data.source_demo import change_post, relay
+from sns_recommend.data.source_demo import change_post
 from sns_recommend.evaluation.benchmark import benchmark
 from sns_recommend.evaluation.offline import evaluate
 from sns_recommend.pipelines.generation import generate
@@ -26,7 +26,6 @@ def main() -> None:
             "status",
             "baseline",
             "source-post",
-            "relay",
             "index",
             "embedding",
             "generate",
@@ -53,8 +52,6 @@ def main() -> None:
         result = baseline(args.user, args.strategy)
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
-    elif args.command == "relay":
-        result = relay()
     elif args.command == "index":
         result = index_posts()
     elif args.command == "embedding":

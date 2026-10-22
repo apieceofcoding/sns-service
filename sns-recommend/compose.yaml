@@ -60,5 +60,18 @@ services:
     depends_on:
       api: {condition: service_healthy}
     command: ["uv", "run", "python", "-m", "sns_recommend.worker"]
+  batch:
+    build: .
+    profiles: [app, batch]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    environment:
+      DATABASE_URL: postgresql://recommend:recommend@db:5432/recommend
+      SOURCE_DATABASE_URL: postgresql://snsuser:snspassword@host.docker.internal:5432/snsdb
+    depends_on:
+      db: {condition: service_healthy}
+    command: ["uv", "run", "sns-recommend-batch"]
+    restart: unless-stopped
+    cpus: 0.5
+    mem_limit: 256m
 volumes:
   recommend-index-pg18:

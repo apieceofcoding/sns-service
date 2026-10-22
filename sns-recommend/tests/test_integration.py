@@ -100,9 +100,7 @@ def test_source_outbox_commits_with_post(infra: None) -> None:
     assert change_post(1001, "Python FastAPI")["version"] == 2
     with source_connection() as conn:
         post = conn.execute("SELECT content,content_version FROM posts WHERE id=1001").fetchone()
-        events = conn.execute(
-            "SELECT event FROM recommend_outbox ORDER BY created_at"
-        ).fetchall()
+        events = conn.execute("SELECT event FROM recommend_outbox ORDER BY created_at").fetchall()
         # The app's next generated ID must not collide with the explicit demo ID.
         created = conn.execute(
             """INSERT INTO posts(content,user_id,created_at,modified_at)
@@ -474,3 +472,90 @@ def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -
     prepare()
     ids = {p["id"] for p in retrieve_candidates(READER, k=50, as_of=reference)}
     assert ids == set(range(7, 19))
+
+
+def test_batch_delivers_without_fastapi(infra: None) -> None:
+    from sns_recommend.batch import poll_once
+
+    change_post(1001, "Python batch")
+    assert poll_once() == {"delivered": 1}
+    assert poll_once() == {"delivered": 0}
+    with connection() as conn:
+        assert count(conn, "events") == 1
+        assert count(conn, "jobs") == 1
+    with source_connection() as conn:
+        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
+        assert row is not None and row["delivered_at"] is not None
+
+
+def test_batch_replays_after_source_ack_transaction_rolls_back(
+    infra: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from collections.abc import Iterator
+    from contextlib import contextmanager
+
+    from sns_recommend import batch
+
+    change_post(1001, "Python replay")
+
+    @contextmanager
+    def interrupted_source() -> Iterator[DatabaseConnection]:
+        with source_connection() as conn:
+            yield conn
+            raise RuntimeError("source acknowledgement interrupted")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(batch, "source_connection", interrupted_source)
+        with pytest.raises(RuntimeError):
+            batch.poll_once()
+    with source_connection() as conn:
+        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
+        assert row is not None and row["delivered_at"] is None
+    assert batch.poll_once() == {"delivered": 1}
+    with connection() as conn:
+        assert count(conn, "events") == 1
+        assert count(conn, "jobs") == 1
+
+
+def test_batch_skips_events_locked_by_another_consumer(infra: None) -> None:
+    from sns_recommend.batch import poll_once
+
+    change_post(1001, "Python locked")
+    change_post(1002, "Python free")
+    with source_connection() as conn:
+        conn.execute("SELECT id FROM recommend_outbox WHERE event->>'post_id'='1001' FOR UPDATE")
+        assert poll_once() == {"delivered": 1}
+    assert poll_once() == {"delivered": 1}
+    with connection() as conn:
+        assert count(conn, "events") == 2
+
+
+def test_batch_limits_work_per_poll(infra: None) -> None:
+    from sns_recommend.batch import poll_once
+
+    change_post(1001, "Python first")
+    change_post(1002, "Python second")
+    assert poll_once(1) == {"delivered": 1}
+    assert poll_once(1) == {"delivered": 1}
+    assert poll_once(1) == {"delivered": 0}
+
+
+def test_batch_keeps_outbox_pending_when_event_processing_fails(
+    infra: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sns_recommend import batch
+
+    change_post(1001, "Python failed")
+
+    def unavailable(event: Event) -> None:
+        raise RuntimeError("recommend database unavailable")
+
+    monkeypatch.setattr(batch, "accept_event", unavailable)
+    with pytest.raises(RuntimeError):
+        batch.poll_once()
+    with source_connection() as conn:
+        row = conn.execute("SELECT delivered_at FROM recommend_outbox").fetchone()
+        assert row is not None and row["delivered_at"] is None
+    with connection() as conn:
+        assert count(conn, "events") == 0
+        assert count(conn, "jobs") == 0

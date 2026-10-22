@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 sns-recommend = "sns_recommend.cli:main"
+sns-recommend-batch = "sns_recommend.batch:main"
 
 [build-system]
 requires = ["hatchling"]
