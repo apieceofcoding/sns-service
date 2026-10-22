@@ -32,10 +32,10 @@ def initialize():
             ddl = ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
             ddl = ddl.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ")
             conn.execute(ddl)
-        conn.execute("""CREATE TABLE IF NOT EXISTS user_interests (
-            user_id bigint PRIMARY KEY REFERENCES users(id),
-            interests text NOT NULL
-        )""")
+        conn.execute("DROP TABLE IF EXISTS user_interests")
+        conn.execute("DROP TRIGGER IF EXISTS recommend_interest_insert ON users")
+        conn.execute("DROP TRIGGER IF EXISTS recommend_interest_update ON users")
+        conn.execute("ALTER TABLE users DROP COLUMN IF EXISTS interests")
         for path in sorted((root / "sql/source").glob("*.sql")):
             conn.execute(path.read_text())
     with connection() as conn:

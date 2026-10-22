@@ -31,15 +31,12 @@ def evaluate(path="data/evaluation.json", k=10):
     index = {p["id"]:v for p,v in zip(data["posts"],vectors,strict=True)}
     rows, stability = [], []
     for user in data["users"]:
-        profile = embedding.embed_query(user["interests"])
         history = [a for a in past if a["user_id"]==user["id"]]
-        liked = [index[a["post_id"]] for a in history if a["action"]=="like"]
-        if liked:
-            profile = normalize([0.7*x+0.3*sum(v[i] for v in liked)/len(liked)
-                                 for i,x in enumerate(profile)])
-        semantic = sorted(corpus,key=lambda p:sum(x*y for x,y in zip(profile,index[p["id"]],strict=True)),reverse=True)
+        liked = [index[a["post_id"]] for a in history if a["action"] in ("like","click")][-5:]
+        profile = normalize([sum(v[i] for v in liked)/len(liked) for i in range(len(liked[0]))]) if liked else None
+        semantic = sorted(corpus,key=lambda p:sum(x*y for x,y in zip(profile,index[p["id"]],strict=True)),reverse=True) if profile is not None else sorted(corpus,key=lambda p:p["created_at"],reverse=True)
         candidates = semantic[:30]
-        inputs = {"interests":user["interests"],"history":history,"candidates":candidates,
+        inputs = {"history":history,"candidates":candidates,
                   "model":settings().rerank_model,"mode":settings().model_mode,
                   "prompt_version":PROMPT_VERSION}
         response = rerank_candidates(inputs)
