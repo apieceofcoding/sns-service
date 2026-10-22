@@ -6,9 +6,9 @@ from pydantic import BaseModel, StrictInt, Field
 from langchain_core.prompts import ChatPromptTemplate
 from .config import settings
 from . import source
-from .db import connection
+from .db import connection, source_connection
 from .feed import publish
-from .jobs import allocate_generation
+from .event_queue import allocate_generation
 from .retrieval import retrieve_candidates, update_profile
 
 PROMPT_VERSION = "sns-rank-v1"
@@ -27,10 +27,10 @@ class Ranking(BaseModel):
 def prepare_inputs(user_id):
     update_profile(user_id)
     candidates = retrieve_candidates(user_id)
-    with connection() as conn:
-        history = conn.execute("""SELECT kind,post_id FROM events WHERE user_id=%s
-            AND occurred_at<=now() AND kind IN ('click','like','not_interested')
-            ORDER BY occurred_at DESC LIMIT 10""",(user_id,)).fetchall()
+    with source_connection() as conn:
+        history = conn.execute("""SELECT action,post_id FROM recommend_events WHERE user_id=%s
+            AND created_at<=now() AND action IN ('click','like','not_interested')
+            ORDER BY created_at DESC LIMIT 10""",(user_id,)).fetchall()
     return {"user_id":user_id, "interests":source.interests(user_id) or "",
             "history":history,"candidates":candidates,"prompt_version":PROMPT_VERSION,
             "model":settings().rerank_model,"mode":settings().model_mode}

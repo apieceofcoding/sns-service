@@ -1,7 +1,7 @@
 from . import source
 from .db import connection
 from .feed import publish
-from .jobs import allocate_generation
+from .event_queue import allocate_generation
 
 
 def baseline(user_id, strategy="latest"):
