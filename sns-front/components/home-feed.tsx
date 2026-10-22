@@ -55,7 +55,7 @@ export function HomeFeed() {
       <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border">
         <h1 className="text-xl font-bold p-4">홈</h1>
         <div role="group" aria-label="피드 선택" className="flex">
-          {(["recommendations", "timelines"] as const).map((value) => (
+          {(["recommend", "timelines"] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -63,7 +63,7 @@ export function HomeFeed() {
               onClick={() => setFeed(value)}
               className={`flex-1 p-3 border-b-2 ${feed === value ? "border-primary font-bold" : "border-transparent text-muted-foreground"}`}
             >
-              {value === "recommendations" ? "추천" : "팔로잉"}
+              {value === "recommend" ? "추천" : "팔로잉"}
             </button>
           ))}
         </div>
@@ -89,7 +89,7 @@ export function HomeFeed() {
 
         {!isLoading && !error && posts.length === 0 && (
           <div className="text-center p-8 text-muted-foreground">
-            <p>{feed === "recommendations" ? "아직 준비된 추천 게시물이 없습니다." : "아직 게시물이 없습니다."}</p>
+            <p>{feed === "recommend" ? "아직 준비된 추천 게시물이 없습니다." : "아직 게시물이 없습니다."}</p>
           </div>
         )}
 
