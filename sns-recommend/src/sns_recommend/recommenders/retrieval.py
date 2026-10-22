@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import UTC, datetime
 from typing import cast
@@ -11,62 +10,48 @@ from langchain_core.retrievers import BaseRetriever
 
 from sns_recommend.core.types import Candidate, DatabaseRow, GenerationResult
 from sns_recommend.data.events import excluded_ids
-from sns_recommend.providers.embeddings import CachedEmbeddings, normalize, space, vector_sql
+from sns_recommend.providers.embeddings import normalize, space, vector_sql
 from sns_recommend.storage import source
 from sns_recommend.storage.event_queue import allocate_generation, current_generation, enqueue
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection
 
 
-def interests_hash(interests: str) -> str:
-    return hashlib.sha256(interests.encode()).hexdigest()
-
-
 def update_profile(user_id: int) -> dict[str, int]:
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
-    interests = source.interests(user_id)
-    if not interests:
-        return {"user_id": user_id}  # No stated interests yet: latest and popular only.
     with source_connection() as conn:
-        reacted = conn.execute(
-            """SELECT post_id FROM recommend_events WHERE user_id=%s AND action IN ('like','click')
-            AND created_at<=now() AND created_at>now()-interval '7 days'
-            GROUP BY post_id ORDER BY max(created_at) DESC,post_id DESC LIMIT 20""",
+        rows = conn.execute(
+            """SELECT post_id FROM recommend_events WHERE user_id=%s
+            AND action IN ('like','click') AND created_at<=now()
+            AND created_at>now()-interval '7 days' GROUP BY post_id
+            ORDER BY max(created_at) DESC,post_id DESC LIMIT 20""",
             (user_id,),
         ).fetchall()
-    recent_ids = [r["post_id"] for r in reacted]
+    ids = [r["post_id"] for r in rows]
     with connection() as conn:
-        reacted = conn.execute(
+        rows = conn.execute(
             """SELECT post_id,content_version,embedding::text FROM post_embeddings
             WHERE post_id=ANY(%s) AND space=%s""",
-            ([r["post_id"] for r in reacted], space()),
+            (ids, space()),
         ).fetchall()
-    by_id = {r["post_id"]: r for r in reacted}
-    reacted = [by_id[i] for i in recent_ids if i in by_id]
-    # Use a reaction only while its post is visible and the vector matches the current body.
-    versions = source.current_versions([r["post_id"] for r in reacted])
-    positives = [r for r in reacted if versions.get(r["post_id"]) == r["content_version"]][:5]
-    # Cached initial text vector, plus stored post vectors. No model call per event.
-    base = CachedEmbeddings().embed_query(interests)
-    vectors = [json.loads(p["embedding"]) for p in positives]
-    mixed = (
-        normalize(
-            [
-                0.7 * x + 0.3 * sum(v[i] for v in vectors) / max(1, len(vectors))
-                for i, x in enumerate(base)
-            ]
-        )
+    versions = source.current_versions(ids)
+    by_id = {r["post_id"]: r for r in rows if versions.get(r["post_id"]) == r["content_version"]}
+    vectors = [json.loads(by_id[i]["embedding"]) for i in ids if i in by_id][:5]
+    vector = (
+        normalize([sum(v[i] for v in vectors) / len(vectors) for i in range(len(vectors[0]))])
         if vectors
-        else base
+        else None
     )
     with connection() as conn:
         conn.execute(
-            """INSERT INTO profiles(user_id,embedding,embedding_space,interests_hash)
-            VALUES (%s,%s::vector,%s,%s) ON CONFLICT(user_id) DO UPDATE SET
-            embedding=EXCLUDED.embedding,embedding_space=EXCLUDED.embedding_space,
-            interests_hash=EXCLUDED.interests_hash""",
-            (user_id, vector_sql(mixed), space(), interests_hash(interests)),
+            """INSERT INTO profiles(user_id,embedding,embedding_space) VALUES (%s,%s::vector,%s)
+            ON CONFLICT(user_id) DO UPDATE SET embedding=EXCLUDED.embedding,embedding_space=EXCLUDED.embedding_space""",
+            (
+                user_id,
+                vector_sql(vector) if vector is not None else None,
+                space() if vector is not None else None,
+            ),
         )
     return {"user_id": user_id}
 
@@ -81,19 +66,14 @@ def retrieve_candidates(
     reference = as_of or datetime.now(UTC)
     # Posts come from the SNS database. The recommend database adds similarity by ID.
     posts = source.recent_posts(user_id, reference)
-    interests = source.interests(user_id)
     with connection() as conn:
         profile = conn.execute(
-            """SELECT embedding::text,embedding_space,interests_hash
+            """SELECT embedding::text,embedding_space
             FROM profiles WHERE user_id=%s""",
             (user_id,),
         ).fetchone()
         valid = bool(
-            profile
-            and interests
-            and profile["embedding"] is not None
-            and profile["embedding_space"] == space()
-            and profile["interests_hash"] == interests_hash(interests)
+            profile and profile["embedding"] is not None and profile["embedding_space"] == space()
         )
         excluded = excluded_ids(conn, user_id)
         similar = (
@@ -164,7 +144,7 @@ def generate_embedding(user_id: int) -> GenerationResult:
     with connection() as conn:
         generation = allocate_generation(conn, user_id)
     update_profile(user_id)
-    docs = PostRetriever(user_id=user_id).invoke("stored user interests")
+    docs = PostRetriever(user_id=user_id).invoke("recent reactions")
     ids = [d.metadata["id"] for d in docs]
     with connection() as conn:
         published = current_generation(conn, user_id) == generation and publish(

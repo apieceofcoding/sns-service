@@ -7,7 +7,7 @@ from sns_recommend.data.events import Event, accept_event
 
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.seed import seed
-from sns_recommend.data.source_demo import change_post
+from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.evaluation.benchmark import benchmark
 from sns_recommend.evaluation.offline import evaluate
 from sns_recommend.pipelines.generation import generate
@@ -27,7 +27,7 @@ def main() -> None:
             "seed",
             "status",
             "baseline",
-            "source-post", "action",
+            "source-post", "seed-actions", "action",
             "index",
             "embedding",
             "generate",
@@ -55,6 +55,8 @@ def main() -> None:
         result = baseline(args.user, args.strategy)
     elif args.command == "action":
         result = accept_event(Event(event_id=uuid4(),action=args.action,user_id=args.user,post_id=args.post))
+    elif args.command == "seed-actions":
+        result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
     elif args.command == "index":

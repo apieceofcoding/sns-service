@@ -21,7 +21,6 @@ class Event(BaseModel):
         "click",
         "like",
         "not_interested",
-        "profile.updated",
     ]
     occurred_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     user_id: int | None = Field(default=None, gt=0, le=2**63 - 1, strict=True)
@@ -36,7 +35,7 @@ class Event(BaseModel):
         else:
             if self.user_id is None or self.version is not None:
                 raise ValueError("user_id required; version is only for post changes")
-            if self.action != "profile.updated" and self.post_id is None:
+            if self.post_id is None:
                 raise ValueError("post_id required")
         return self
 

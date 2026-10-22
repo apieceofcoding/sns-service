@@ -34,7 +34,7 @@ from sns_recommend.storage.event_queue import (
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection
 
-GRAPH_VERSION = "sns-feed-v2"
+GRAPH_VERSION = "sns-feed-behavior-v3"
 
 
 class FeedState(TypedDict, total=False):
@@ -167,7 +167,7 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
     with PostgresSaver.from_conn_string(settings().database_url) as saver:
         saver.setup()
         graph = make_graph(saver, pause)
-        config: RunnableConfig = {"configurable": {"thread_id": "recommend:" + str(event["id"])}}
+        config: RunnableConfig = {"configurable": {"thread_id": "behavior:" + str(event["id"])}}
         saved = graph.get_state(config)
         if saved.values:
             if saved.values["graph_version"] != GRAPH_VERSION:

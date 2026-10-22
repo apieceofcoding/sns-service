@@ -21,13 +21,6 @@ def user_exists(user_id: int) -> bool:
     return row is not None
 
 
-def interests(user_id: int) -> str | None:
-    with source_connection() as conn:
-        row = conn.execute(
-            "SELECT interests FROM user_interests WHERE user_id=%s", (user_id,)
-        ).fetchone()
-    return row["interests"] if row else None
-
 
 def ordered_post_ids(strategy: str) -> list[int]:
     order = {"latest": "created_at DESC,id DESC", "popular": "like_count DESC,id DESC"}[strategy]

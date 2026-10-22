@@ -5,7 +5,6 @@ from sns_recommend.core.types import GenerationResult, RankingInput
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
 from sns_recommend.recommenders.retrieval import retrieve_candidates, update_profile
-from sns_recommend.storage import source
 from sns_recommend.storage.event_queue import allocate_generation, current_generation
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection
@@ -16,15 +15,17 @@ def prepare_inputs(user_id: int) -> RankingInput:
     candidates = retrieve_candidates(user_id)
     with source_connection() as conn:
         history = conn.execute(
-            """SELECT action,post_id FROM recommend_events WHERE user_id=%s
-            AND created_at<=now() AND action IN ('click','like','not_interested')
-            ORDER BY created_at DESC LIMIT 10""",
+            """SELECT e.action,e.post_id,p.content AS body FROM recommend_events e JOIN posts p ON p.id=e.post_id WHERE e.user_id=%s AND p.deleted_at IS NULL
+            AND e.created_at<=now() AND e.action IN ('click','like','not_interested')
+            ORDER BY e.created_at DESC LIMIT 10""",
             (user_id,),
         ).fetchall()
     return {
         "user_id": user_id,
-        "interests": source.interests(user_id) or "",
-        "history": [{"action": row["action"], "post_id": row["post_id"]} for row in history],
+        "history": [
+            {"action": row["action"], "post_id": row["post_id"], "body": row["body"]}
+            for row in history
+        ],
         "candidates": candidates,
         "prompt_version": PROMPT_VERSION,
         "model": settings().rerank_model,

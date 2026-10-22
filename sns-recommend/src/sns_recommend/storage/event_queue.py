@@ -170,7 +170,7 @@ def migrate_legacy() -> None:
                     continue
                 action = {
                     "index": "post.updated",
-                    "profile": "profile.updated",
+                    "profile": "recommend.requested",
                     "build": "recommend.requested",
                 }[row["kind"]]
                 conn.execute(

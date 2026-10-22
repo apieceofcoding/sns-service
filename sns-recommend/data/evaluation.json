@@ -1606,18 +1606,15 @@
   "users": [
     {
       "id": 1,
-      "topic": "backend",
-      "interests": "Python FastAPI PostgreSQL 백엔드 설계와 데이터베이스 실습"
+      "topic": "backend"
     },
     {
       "id": 2,
-      "topic": "travel",
-      "interests": "서울 제주 여행 사진과 맛집 산책 기록"
+      "topic": "travel"
     },
     {
       "id": 3,
-      "topic": "fitness",
-      "interests": "운동 러닝 건강 근력 훈련 기록"
+      "topic": "fitness"
     }
   ],
   "actions": [

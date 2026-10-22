@@ -48,9 +48,10 @@ def test_event_with_content_never_reaches_database(monkeypatch: pytest.MonkeyPat
 
         json={
             "event_id": str(uuid4()),
-            "action": "profile.updated",
+            "action": "like",
+            "post_id": 1,
             "user_id": 1,
-            "payload": {"interests": ["Python"]},
+            "payload": {"body": "Python"},
         },
     )
     assert response.status_code == 422

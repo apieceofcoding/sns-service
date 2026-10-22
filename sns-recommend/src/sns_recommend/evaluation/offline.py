@@ -30,24 +30,24 @@ def evaluate(path: str | Path | None = None, k: int = 10) -> EvaluationReport:
     rows: list[QualityRow] = []
     stability: list[StabilityRow] = []
     for user in data["users"]:
-        profile = embedding.embed_query(user["interests"])
         history = [a for a in past if a["user_id"] == user["id"]]
-        liked = [index[a["post_id"]] for a in history if a["action"] == "like"]
-        if liked:
-            profile = normalize(
-                [
-                    0.7 * x + 0.3 * sum(v[i] for v in liked) / len(liked)
-                    for i, x in enumerate(profile)
-                ]
+        liked = [index[a["post_id"]] for a in history if a["action"] in ("like", "click")][-5:]
+        profile = (
+            normalize([sum(v[i] for v in liked) / len(liked) for i in range(len(liked[0]))])
+            if liked
+            else None
+        )
+        semantic = (
+            sorted(
+                corpus,
+                key=lambda p: sum(x * y for x, y in zip(profile, index[p["id"]], strict=True)),
+                reverse=True,
             )
-        semantic = sorted(
-            corpus,
-            key=lambda p: sum(x * y for x, y in zip(profile, index[p["id"]], strict=True)),
-            reverse=True,
+            if profile is not None
+            else sorted(corpus, key=lambda p: p["created_at"], reverse=True)
         )
         candidates = semantic[:30]
         inputs: RankingInput = {
-            "interests": user["interests"],
             "history": history,
             "candidates": candidates,
             "model": settings().rerank_model,

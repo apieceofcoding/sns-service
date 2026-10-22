@@ -19,7 +19,7 @@ ACTIONS = (
     "click",
     "like",
     "not_interested",
-    "profile.updated",
+    
 )
 
 
@@ -33,7 +33,7 @@ def handle(event: EventRecord) -> None:
         if row is not None and row["content_version"] > event["version"]:
             return
         index_posts([event["post_id"]])
-    elif event["action"] in ("click", "like", "profile.updated"):
+    elif event["action"] in ("click", "like"):
         enqueue("recommend.requested", event["user_id"])
     # User actions remain available as personalization history after completion.
 

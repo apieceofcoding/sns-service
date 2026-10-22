@@ -20,13 +20,11 @@ from sns_recommend.core.types import (
 )
 from sns_recommend.data.events import Event, accept_event
 from sns_recommend.data.indexing import index_posts
-from sns_recommend.data.seed import READERS
-from sns_recommend.data.source_demo import change_post
+from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.pipelines.graph import run_graph, start_graph
 from sns_recommend.providers.embeddings import (
     CachedEmbeddings,
     FixtureEmbeddings,
-    normalize,
     space,
     vector_sql,
 )
@@ -41,6 +39,7 @@ READER = 7  # Seed reader interested in backend and AI. Readers write no posts.
 
 
 def prepare() -> None:
+    seed_actions()
     index_posts()
     update_profile(READER)
 
@@ -231,21 +230,24 @@ def test_profile_uses_recent_actions_instead_of_largest_post_ids(infra: None) ->
             "SELECT embedding::text FROM profiles WHERE user_id=%s", (READER,)
         ).fetchone()
     assert row is not None
-    base = FixtureEmbeddings().embed_query(READERS[READER])
-    expected = normalize([0.7 * x + 0.3 * y for x, y in zip(base, recent, strict=True)])
+    expected = recent
     assert json.loads(row["embedding"]) == pytest.approx(expected, abs=1e-7)
 
 
 def test_stale_user_vector_is_not_used_for_similarity(infra: None) -> None:
     prepare()
     with source_connection() as conn:
-        conn.execute("UPDATE user_interests SET interests='음악 감상' WHERE user_id=%s", (READER,))
+        conn.execute(
+            "DELETE FROM recommend_events WHERE user_id=%s AND action IN ('like','click')",
+            (READER,),
+        )
+    update_profile(READER)
     candidates = retrieve_candidates(READER)
     assert candidates
     assert all(p["similarity"] is None and "embedding" not in p["sources"] for p in candidates)
 
 
-def test_new_account_without_interests_gets_latest_and_popular_only(infra: None) -> None:
+def test_new_account_without_actions_gets_latest_and_popular_only(infra: None) -> None:
     index_posts()
     with source_connection() as conn:
         conn.execute(
@@ -561,26 +563,43 @@ def test_failed_event_does_not_block_the_next_event(
         assert conn.execute("SELECT post_id FROM post_embeddings").fetchone()["post_id"] == 1002
 
 
-def test_current_interests_and_change_event_have_different_roles(infra: None) -> None:
-    from sns_recommend.event_worker import poll_once
+def test_behavior_only_seed_and_cold_start(infra: None) -> None:
+    assert seed_actions() == {"actions": 6}
+    assert seed_actions() == {"actions": 0}
+    index_posts()
+    for user in [7, 8, 9]:
+        update_profile(user)
+        candidates = retrieve_candidates(user)
+        assert any(p["similarity"] is not None for p in candidates)
+    with source_connection() as conn:
+        assert (
+            conn.execute("SELECT to_regclass('user_interests') AS name").fetchone()["name"] is None
+        )
+        assert (
+            conn.execute(
+                "SELECT count(*) AS n FROM information_schema.columns WHERE table_name='users' AND column_name='interests'"
+            ).fetchone()["n"]
+            == 0
+        )
+
+
+def test_removed_interest_storage_is_cleaned_without_deleting_accounts(infra: None) -> None:
+    from sns_recommend.storage.postgres import initialize
 
     with source_connection() as conn:
-        conn.execute("UPDATE user_interests SET interests='제주 여행' WHERE user_id=%s", (READER,))
-        event = conn.execute(
-            "SELECT * FROM recommend_events WHERE action='profile.updated'"
-        ).fetchone()
-        assert event["user_id"] == READER and event["version"] is None
-        assert (
-            conn.execute(
-                "SELECT interests FROM user_interests WHERE user_id=%s", (READER,)
-            ).fetchone()["interests"]
-            == "제주 여행"
-        )
-    assert poll_once() == {"processed": 1}
+        conn.execute("ALTER TABLE users ADD COLUMN interests text")
+        conn.execute("CREATE TABLE user_interests(user_id bigint PRIMARY KEY,interests text)")
+        conn.execute("INSERT INTO user_interests VALUES (7,'legacy text')")
+    initialize()
+    initialize()
     with source_connection() as conn:
+        assert conn.execute("SELECT count(*) AS n FROM users").fetchone()["n"] == 9
+        assert (
+            conn.execute("SELECT to_regclass('user_interests') AS name").fetchone()["name"] is None
+        )
         assert (
             conn.execute(
-                "SELECT count(*) AS n FROM recommend_events WHERE action='recommend.requested'"
+                "SELECT count(*) AS n FROM information_schema.columns WHERE table_name='users' AND column_name='interests'"
             ).fetchone()["n"]
-            == 1
+            == 0
         )

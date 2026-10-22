@@ -27,11 +27,11 @@ class Action(TypedDict):
     action: str
     post_id: int
     user_id: NotRequired[int]
+    body: NotRequired[str]
     at: NotRequired[str]
 
 
 class RankingInput(TypedDict):
-    interests: str
     history: list[Action]
     candidates: list[Candidate]
     model: str
