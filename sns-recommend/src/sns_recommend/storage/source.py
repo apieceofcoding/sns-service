@@ -21,7 +21,6 @@ def user_exists(user_id: int) -> bool:
     return row is not None
 
 
-
 def ordered_post_ids(strategy: str) -> list[int]:
     order = {"latest": "created_at DESC,id DESC", "popular": "like_count DESC,id DESC"}[strategy]
     with source_connection() as conn:

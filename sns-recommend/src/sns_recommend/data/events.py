@@ -6,7 +6,6 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from sns_recommend.core.types import DatabaseConnection
 from sns_recommend.storage import source
 from sns_recommend.storage.postgres import source_connection
 
@@ -59,8 +58,7 @@ def accept_event(event: Event) -> dict[str, bool]:
     return {"accepted": bool(row), "duplicate": not bool(row)}
 
 
-def excluded_ids(conn: DatabaseConnection, user_id: int) -> set[int]:
-    # Read the original event history, including events not consumed yet.
+def excluded_ids(user_id: int) -> set[int]:
     with source_connection() as original:
         rows = original.execute(
             """SELECT DISTINCT post_id FROM recommend_events WHERE user_id=%s

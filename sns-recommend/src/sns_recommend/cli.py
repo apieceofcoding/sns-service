@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import json
 from uuid import uuid4
-from sns_recommend.data.events import Event, accept_event
 
+from sns_recommend.data.events import Event, accept_event
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.seed import seed
 from sns_recommend.data.source_demo import change_post, seed_actions
@@ -27,7 +27,9 @@ def main() -> None:
             "seed",
             "status",
             "baseline",
-            "source-post", "seed-actions", "action",
+            "source-post",
+            "seed-actions",
+            "action",
             "index",
             "embedding",
             "generate",
@@ -42,7 +44,9 @@ def main() -> None:
     parser.add_argument("--post", type=int, default=1001)
     parser.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     parser.add_argument("--pause-after-rerank", action="store_true")
-    parser.add_argument("--action", choices=["impression","click","like","not_interested"], default="like")
+    parser.add_argument(
+        "--action", choices=["impression", "click", "like", "not_interested"], default="like"
+    )
     args = parser.parse_args()
     result: object
     if args.command == "init":
@@ -54,7 +58,9 @@ def main() -> None:
     elif args.command == "baseline":
         result = baseline(args.user, args.strategy)
     elif args.command == "action":
-        result = accept_event(Event(event_id=uuid4(),action=args.action,user_id=args.user,post_id=args.post))
+        result = accept_event(
+            Event(event_id=uuid4(), action=args.action, user_id=args.user, post_id=args.post)
+        )
     elif args.command == "seed-actions":
         result = seed_actions()
     elif args.command == "source-post":

@@ -19,7 +19,6 @@ ACTIONS = (
     "click",
     "like",
     "not_interested",
-    
 )
 
 

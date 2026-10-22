@@ -1,6 +1,5 @@
 name: sns-recommend
 services:
-  # Vectors, events and jobs. Accounts and posts stay in the SNS app database (5432).
   db:
     image: pgvector/pgvector:pg18
     environment:

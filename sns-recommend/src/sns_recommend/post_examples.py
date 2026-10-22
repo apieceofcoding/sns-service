@@ -1,4 +1,5 @@
 """Deterministic fictional posts for the course, without external model calls."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta

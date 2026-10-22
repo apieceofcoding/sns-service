@@ -12,7 +12,7 @@ from sns_recommend.core.types import Candidate, DatabaseRow, GenerationResult
 from sns_recommend.data.events import excluded_ids
 from sns_recommend.providers.embeddings import normalize, space, vector_sql
 from sns_recommend.storage import source
-from sns_recommend.storage.event_queue import allocate_generation, current_generation, enqueue
+from sns_recommend.storage.event_queue import allocate_generation, current_generation
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection
 
@@ -64,7 +64,6 @@ def retrieve_candidates(
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     reference = as_of or datetime.now(UTC)
-    # Posts come from the SNS database. The recommend database adds similarity by ID.
     posts = source.recent_posts(user_id, reference)
     with connection() as conn:
         profile = conn.execute(
@@ -75,7 +74,7 @@ def retrieve_candidates(
         valid = bool(
             profile and profile["embedding"] is not None and profile["embedding_space"] == space()
         )
-        excluded = excluded_ids(conn, user_id)
+        excluded = excluded_ids(user_id)
         similar = (
             conn.execute(
                 """SELECT post_id,content_version,1-(embedding <=> %s::vector) AS similarity
@@ -151,8 +150,3 @@ def generate_embedding(user_id: int) -> GenerationResult:
             user_id, ids, "embedding", generation
         )
     return {"strategy": "embedding", "post_ids": ids, "published": published}
-
-
-def process_profile(user_id: int) -> None:
-    update_profile(user_id)
-    enqueue("recommend.requested", user_id)

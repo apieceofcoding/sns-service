@@ -3,9 +3,11 @@ from __future__ import annotations
 from sns_recommend.data.seed import TOPICS, USERNAMES
 
 
-def test_course_topics_have_content() -> None:
+def test_course_topics_have_examples() -> None:
     assert len(TOPICS) == 6
-    assert all(len(v) > 10 for v in TOPICS.values())
+    from sns_recommend.post_examples import post_body
+
+    assert all(len(post_body(topic, 0)) > 10 for topic in TOPICS)
 
 
 def test_seed_users_have_distinct_usernames() -> None:
