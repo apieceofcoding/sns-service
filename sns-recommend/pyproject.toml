@@ -19,7 +19,7 @@ dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
 
 [project.scripts]
 sns-recommend = "sns_recommend.cli:main"
-sns-recommend-batch = "sns_recommend.batch:main"
+sns-recommend-event-worker = "sns_recommend.event_worker:main"
 
 [build-system]
 requires = ["hatchling"]
