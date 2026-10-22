@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type { Post } from '@/lib/types'
 
-export type Feed = 'recommendations' | 'timelines'
+export type Feed = 'recommend' | 'timelines'
 
 export interface TimelineResponse {
   posts: Post[]

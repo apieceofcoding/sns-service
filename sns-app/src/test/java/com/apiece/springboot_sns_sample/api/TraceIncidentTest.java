@@ -160,7 +160,7 @@ class TraceIncidentTest {
     }
 
     @Test
-    void unknownScenarioIsRejectedWithoutCallingRecommendation() throws Exception {
+    void unknownScenarioIsRejectedWithoutCallingRecommend() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         startServer(exchange -> {
             calls.incrementAndGet();
@@ -174,7 +174,7 @@ class TraceIncidentTest {
     }
 
     @Test
-    void defaultTraceStillPropagatesRecommendationErrors() throws Exception {
+    void defaultTraceStillPropagatesRecommendErrors() throws Exception {
         startServer(exchange -> respond(exchange, 500, "{}"));
         var mvc = MockMvcBuilders.standaloneSetup(controller()).build();
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> mvc.perform(get("/api/v1/demo/trace")))
