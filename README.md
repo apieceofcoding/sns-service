@@ -142,14 +142,17 @@ uv sync --locked
 docker compose up -d --wait
 uv run sns-recommend init
 uv run sns-recommend source-post --post 1001
+uv run sns-recommend-batch --once
 ```
+
+`delivered: 1`을 확인해요. 다시 실행하면 `0`입니다. `init`은 기존 데이터를 유지해요.
 
 ```sh
-# 별도 터미널에서 2단원 명령으로 API를 다시 켠 뒤 전송
-uv run sns-recommend relay
+# 별도 터미널에서 실행: 3초마다 Outbox 조회, Ctrl+C로 종료
+uv run sns-recommend-batch
 ```
 
-`delivered: 1`을 확인해요. `init`은 필요한 DB 구조를 추가하고 기존 데이터를 유지합니다.
+배치는 FastAPI와 별도 프로세스입니다. 이벤트와 작업을 저장한 뒤 전달 완료를 표시해요.
 
 ### part-4. 게시글 색인
 
