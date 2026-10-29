@@ -6,6 +6,7 @@ from .baseline import baseline
 from .db import initialize, source_connection
 from .evaluation import evaluate
 from .events import Event, accept_event
+from .profiles import update_profile
 from .graph import start_graph
 from .indexing import index_posts
 from .ranking import generate
@@ -27,6 +28,7 @@ def main():
             "seed-actions",
             "action",
             "index",
+            "profile",
             "embedding",
             "generate",
             "graph",
@@ -58,6 +60,8 @@ def main():
         result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
+    elif args.command == "profile":
+        result = update_profile(args.user)
     elif args.command == "index":
         result = index_posts()
     elif args.command == "embedding":
