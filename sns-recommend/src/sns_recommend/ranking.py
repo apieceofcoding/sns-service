@@ -7,11 +7,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, StrictInt
 
 from .config import settings
-from .db import connection, source_connection
-from .event_queue import allocate_generation
+from .db import source_connection
 from .feed import publish
 from .retrieval import retrieve_candidates
-from .profiles import update_profile
+from .profiles import build_user_vector
 
 PROMPT_VERSION = "sns-rank-behavior-v2"
 PROMPT = ChatPromptTemplate.from_messages(
@@ -32,8 +31,8 @@ class Ranking(BaseModel):
 
 
 def prepare_inputs(user_id):
-    update_profile(user_id)
-    candidates = retrieve_candidates(user_id)
+    user_vector = build_user_vector(user_id)
+    candidates = retrieve_candidates(user_id, user_vector=user_vector)
     with source_connection() as conn:
         history = conn.execute(
             """SELECT e.action,e.post_id,p.content AS body FROM recommend_events e JOIN posts p ON p.id=e.post_id WHERE e.user_id=%s AND p.deleted_at IS NULL
@@ -143,7 +142,7 @@ def diversify(candidates, ids):
     return result
 
 
-def generate(user_id, generation=None, snapshot_id=None, created_at=None):
+def generate(user_id):
     inputs = prepare_inputs(user_id)
     candidates = inputs["candidates"]
     strategy = "fixture_llm" if settings().model_mode == "fixture" else "llm"
@@ -153,8 +152,5 @@ def generate(user_id, generation=None, snapshot_id=None, created_at=None):
     except Exception:
         ordered, strategy = [p["id"] for p in candidates], "rules_fallback"
     ids = diversify(candidates, ordered)
-    if generation is None:
-        with connection() as conn:
-            generation = allocate_generation(conn, user_id)
-    published = publish(user_id, ids, strategy, generation, snapshot_id, created_at)
+    published = publish(user_id, ids, strategy)
     return {"strategy": strategy, "post_ids": ids, "published": published}
