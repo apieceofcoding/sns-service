@@ -1,6 +1,6 @@
 # SNS 추천 서비스 실습
 
-추천을 생성해 Redis에 저장하고 FastAPI로 조회합니다. **part-1부터 part-9까지 순서대로 진행해요.** 기본 실습에는 모델 API 키가 필요 없습니다.
+추천을 생성해 Redis에 저장하고 FastAPI로 조회합니다. **part-1부터 part-8까지 순서대로 진행해요.** 기본 실습에는 모델 API 키가 필요 없습니다.
 
 | 폴더 | 역할 |
 |---|---|
@@ -158,7 +158,50 @@ uv run sns-recommend-event-worker --once
 uv run sns-recommend-event-worker
 ```
 
-`recommend_events`에 기록한 변경을 별도 이벤트 worker가 처리해요. 처리 후 `--once`를 다시 실행하면 `processed: 0`입니다. 행동 기록은 남습니다.
+`recommend_events`에 기록한 변경을 별도 이벤트 worker가 처리해요. 처리 후 `--once`를 다시 실행하면 `processed: 0`입니다. 행동 기록과 예약된 추천 갱신 요청은 남습니다.
+
+#### 행동과 추천 갱신 기록
+
+이 단원에서 이벤트 종류와 저장 경로를 완성합니다. 이후 단원은 같은 기록으로 후보와 순위를 만들어요. SNS 화면의 행동 자동 전송은 포함하지 않으며 API 또는 CLI로 기록합니다.
+
+| action | 생성 경로 | 처리 |
+|---|---|---|
+| `post.updated` | 글 작성과 본문 수정 → SNS DB 트리거 | 글 벡터 갱신 |
+| `post.deleted` | 글의 `deleted_at` 변경 → SNS DB 트리거 | 검색 벡터에 삭제 반영 |
+| `impression` | 이벤트 API 또는 `action` CLI | 이미 본 글 제외 |
+| `click`, `like` | 이벤트 API 또는 CLI. `seed-actions`는 좋아요 기록 | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
+| `not_interested` | 이벤트 API 또는 `action` CLI | 관심 없는 글 제외 |
+| `recommend.requested` | 피드 조회, 클릭과 좋아요 처리, 주기 예약 또는 명시적 생성 명령 | 사용자별 추천 생성 예약 |
+
+글 변경은 원본 저장과 같은 트랜잭션에서 기록합니다. 이벤트 API는 `POST /internal/events`이며, CLI는 같은 저장 함수를 직접 호출해요. 같은 이벤트 ID의 재전송은 중복 저장하지 않습니다.
+
+```sh
+# SNS 화면 대신 CLI로 노출과 클릭 기록
+uv run sns-recommend action --user 7 --post 1 --action impression
+uv run sns-recommend action --user 7 --post 4 --action click
+uv run sns-recommend-event-worker --once
+
+# 2단원에서 실행한 추천 API를 종료하고 새 터미널에서 다시 실행
+uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
+```
+
+```sh
+# 실습 터미널: 조회 결과와 refresh_event 확인
+curl -fsS http://localhost:8001/internal/feeds/7
+```
+
+추천 목록이 없거나 오래됐거나 마지막 페이지이면 기존 응답을 반환하면서 갱신을 예약해요. 조회는 모델을 호출하지 않습니다. 조회와 주기 예약은 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합칩니다. 클릭과 좋아요에 따른 예약도 같은 대기 요청을 재사용해요.
+
+주기 예약 규칙도 여기서 정의합니다. 최근 30분 내 조회했고 최근 5분 내 갱신 요청이 없는 사용자를 대상으로 해요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 6단원에서 연결합니다. 8단원에서는 같은 규칙을 주기적으로 실행하고 간격과 비용을 검증해요.
+
+```sql
+-- SNS DB에서 기록과 처리 상태 확인
+SELECT action, user_id, post_id, processed_at
+FROM recommend_events
+ORDER BY created_at DESC, id DESC LIMIT 20;
+```
+
+`recommend.requested`는 이벤트 worker가 처리하지 않으므로 대기 상태가 정상입니다. 과거 호환용 `profile.updated`는 새로 생성하지 않습니다.
 
 ### part-4. 행동 기반 검색
 
@@ -201,7 +244,7 @@ uv run sns-recommend evaluate
 
 `sns-recommend/reports/evaluation.json`에서 합성 데이터의 전략별 점수를 비교합니다.
 
-### part-8. 조회 측정과 자동 갱신
+### part-8. 갱신 주기와 조회 비용 검증
 
 ```sh
 # SNS 앱 다시 빌드
@@ -224,7 +267,7 @@ uv run sns-recommend benchmark --user 7
 uv run python -m sns_recommend.worker
 ```
 
-worker는 30초마다 갱신 대상을 확인해요. 최근 30분 내 조회했고 최근 5분 내 생성 작업이 없는 사용자의 추천을 갱신합니다.
+worker는 3단원에서 정의한 예약 규칙을 30초마다 실행합니다. 기록 구조를 바꾸지 않고, 갱신 주기와 목록 나이, 생성 비용을 확인해요.
 
 ## 종료
 
