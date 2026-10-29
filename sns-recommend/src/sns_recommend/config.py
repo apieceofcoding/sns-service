@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     dimensions: int = 768
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
+    minimum_refresh_seconds: int = 60
     lease_seconds: int = 120
     daily_call_limit: int = 20
     recordings_dir: str = "recordings"

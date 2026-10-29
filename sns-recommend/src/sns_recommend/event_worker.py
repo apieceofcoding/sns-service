@@ -8,7 +8,7 @@ from threading import Event
 from types import FrameType
 
 from .db import source_connection
-from .event_queue import EventRecord, claim, finish, heartbeat, retry
+from .event_queue import EventRecord, claim, enqueue, finish, heartbeat, retry
 from .indexing import index_posts
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,9 @@ def handle(event: EventRecord) -> None:
         if row is not None and row["content_version"] > event["version"]:
             return
         index_posts([event["post_id"]])
-    # User actions are the history itself. Retrieval and reranking read it directly.
+    elif event["action"] in ("click", "like"):
+        enqueue("recommend.requested", event["user_id"])
+    # User actions remain available as personalization history after completion.
 
 
 def poll_once(batch_size: int = 100) -> dict[str, int]:
