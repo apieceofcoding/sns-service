@@ -5,12 +5,12 @@ from typing import cast
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
-from sns_recommend.data.profiles import update_profile
+from sns_recommend.data.profiles import build_user_vector
 from langchain_core.retrievers import BaseRetriever
 
 from sns_recommend.core.types import Candidate, DatabaseRow, GenerationResult
 from sns_recommend.data.events import excluded_ids
-from sns_recommend.providers.embeddings import space
+from sns_recommend.providers.embeddings import space, vector_sql
 from sns_recommend.storage import source
 from sns_recommend.storage.event_queue import allocate_generation, current_generation
 from sns_recommend.storage.feeds import publish
@@ -18,7 +18,8 @@ from sns_recommend.storage.postgres import connection
 
 
 def retrieve_candidates(
-    user_id: int, k: int = 30, as_of: datetime | None = None
+    user_id: int, k: int = 30, as_of: datetime | None = None,
+    *, user_vector: list[float] | None = None
 ) -> list[Candidate]:
     if not 1 <= k <= 50:
         raise ValueError("candidate count must be between 1 and 50")
@@ -27,22 +28,15 @@ def retrieve_candidates(
     reference = as_of or datetime.now(UTC)
     posts = source.recent_posts(user_id, reference)
     with connection() as conn:
-        profile = conn.execute(
-            """SELECT embedding::text,embedding_space
-            FROM profiles WHERE user_id=%s""",
-            (user_id,),
-        ).fetchone()
-        valid = bool(
-            profile and profile["embedding"] is not None and profile["embedding_space"] == space()
-        )
+        valid = user_vector is not None
         excluded = excluded_ids(user_id)
         similar = (
             conn.execute(
                 """SELECT post_id,content_version,1-(embedding <=> %s::vector) AS similarity
                 FROM post_embeddings WHERE space=%s AND post_id=ANY(%s)""",
-                (profile["embedding"], space(), [p["id"] for p in posts]),
+                (vector_sql(user_vector), space(), [p["id"] for p in posts]),
             ).fetchall()
-            if valid and profile
+            if valid
             else []
         )
     # A vector made from an older body is ignored until the post is indexed again.
@@ -90,21 +84,22 @@ def retrieve_candidates(
 class PostRetriever(BaseRetriever):
     user_id: int
     k: int = 30
+    user_vector: list[float] | None = None
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> list[Document]:
         return [
             Document(page_content=p["body"], metadata={k: v for k, v in p.items() if k != "body"})
-            for p in retrieve_candidates(self.user_id, self.k)
+            for p in retrieve_candidates(self.user_id, self.k, user_vector=self.user_vector)
         ]
 
 
 def generate_embedding(user_id: int) -> GenerationResult:
     with connection() as conn:
         generation = allocate_generation(conn, user_id)
-    update_profile(user_id)
-    docs = PostRetriever(user_id=user_id).invoke("recent reactions")
+    user_vector = build_user_vector(user_id)
+    docs = PostRetriever(user_id=user_id, user_vector=user_vector).invoke("recent reactions")
     ids = [d.metadata["id"] for d in docs]
     with connection() as conn:
         published = current_generation(conn, user_id) == generation and publish(

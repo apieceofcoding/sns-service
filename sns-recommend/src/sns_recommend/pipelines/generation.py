@@ -5,15 +5,15 @@ from sns_recommend.core.types import GenerationResult, RankingInput
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
 from sns_recommend.recommenders.retrieval import retrieve_candidates
-from sns_recommend.data.profiles import update_profile
+from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.storage.event_queue import allocate_generation, current_generation
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection
 
 
 def prepare_inputs(user_id: int) -> RankingInput:
-    update_profile(user_id)
-    candidates = retrieve_candidates(user_id)
+    user_vector = build_user_vector(user_id)
+    candidates = retrieve_candidates(user_id, user_vector=user_vector)
     with source_connection() as conn:
         history = conn.execute(
             """SELECT e.action,e.post_id,p.content AS body FROM recommend_events e JOIN posts p ON p.id=e.post_id WHERE e.user_id=%s AND p.deleted_at IS NULL

@@ -29,7 +29,7 @@ from sns_recommend.providers.embeddings import (
     vector_sql,
 )
 from sns_recommend.recommenders.retrieval import retrieve_candidates
-from sns_recommend.data.profiles import update_profile
+from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.storage.event_queue import claim, enqueue, finish, retry
 from sns_recommend.storage.feeds import publish, read_feed
 from sns_recommend.storage.postgres import connection, source_connection
@@ -42,7 +42,6 @@ READER = 7  # Seed reader interested in backend and AI. Readers write no posts.
 def prepare() -> None:
     seed_actions()
     index_posts()
-    update_profile(READER)
 
 
 def count(conn: DatabaseConnection, table: str) -> int:
@@ -225,14 +224,8 @@ def test_profile_uses_recent_actions_instead_of_largest_post_ids(infra: None) ->
                 occurred_at=now - timedelta(minutes=i + 1),
             )
         )
-    update_profile(READER)
-    with connection() as conn:
-        row = conn.execute(
-            "SELECT embedding::text FROM profiles WHERE user_id=%s", (READER,)
-        ).fetchone()
-    assert row is not None
-    expected = recent
-    assert json.loads(row["embedding"]) == pytest.approx(expected, abs=1e-7)
+    vector = build_user_vector(READER)
+    assert vector == pytest.approx(recent, abs=1e-7)
 
 
 def test_stale_user_vector_is_not_used_for_similarity(infra: None) -> None:
@@ -242,8 +235,7 @@ def test_stale_user_vector_is_not_used_for_similarity(infra: None) -> None:
             "DELETE FROM recommend_events WHERE user_id=%s AND action IN ('like','click')",
             (READER,),
         )
-    update_profile(READER)
-    candidates = retrieve_candidates(READER)
+    candidates = retrieve_candidates(READER, user_vector=build_user_vector(READER))
     assert candidates
     assert all(p["similarity"] is None and "embedding" not in p["sources"] for p in candidates)
 
@@ -255,8 +247,7 @@ def test_new_account_without_actions_gets_latest_and_popular_only(infra: None) -
             """INSERT INTO users(id,username,created_at,modified_at)
             VALUES (10,'signed-up-in-app',now(),now())"""
         )
-    update_profile(10)
-    candidates = retrieve_candidates(10)
+    candidates = retrieve_candidates(10, user_vector=build_user_vector(10))
     assert candidates
     assert all(p["similarity"] is None for p in candidates)
     with pytest.raises(LookupError, match="unknown user"):
@@ -272,7 +263,7 @@ def test_candidate_merge_keeps_fresh_and_popular_posts(infra: None) -> None:
                 VALUES (%s,1,'unindexed',%s,now(),now())""",
                 (post_id, likes),
             )
-    candidates = retrieve_candidates(READER)
+    candidates = retrieve_candidates(READER, user_vector=build_user_vector(READER))
     assert len(candidates) == 30
     by_id = {p["id"]: p for p in candidates}
     assert "latest" in by_id[1001]["sources"]
@@ -291,7 +282,7 @@ def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -
                 (post_created_at(post_id, reference, group_size=6), post_id),
             )
     prepare()
-    ids = {p["id"] for p in retrieve_candidates(READER, k=50, as_of=reference)}
+    ids = {p["id"] for p in retrieve_candidates(READER, user_vector=build_user_vector(READER), k=50, as_of=reference)}
     assert ids == set(range(7, 19))
 
 
@@ -570,7 +561,7 @@ def test_behavior_only_seed_and_cold_start(infra: None) -> None:
     index_posts()
     for user in [7, 8, 9]:
         update_profile(user)
-        candidates = retrieve_candidates(user)
+        candidates = retrieve_candidates(user, user_vector=build_user_vector(user))
         assert any(p["similarity"] is not None for p in candidates)
     with source_connection() as conn:
         assert (

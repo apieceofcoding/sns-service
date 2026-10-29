@@ -4,10 +4,10 @@ import json
 
 from sns_recommend.storage import source
 from sns_recommend.storage.postgres import connection, source_connection
-from sns_recommend.providers.embeddings import normalize, space, vector_sql
+from sns_recommend.providers.embeddings import normalize, space
 
 
-def update_profile(user_id: int) -> dict[str, int | bool]:
+def build_user_vector(user_id: int) -> list[float] | None:
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     with source_connection() as conn:
@@ -33,15 +33,4 @@ def update_profile(user_id: int) -> dict[str, int | bool]:
         if vectors
         else None
     )
-    with connection() as conn:
-        conn.execute(
-            """INSERT INTO profiles(user_id,embedding,embedding_space) VALUES (%s,%s::vector,%s)
-            ON CONFLICT(user_id) DO UPDATE SET embedding=EXCLUDED.embedding,embedding_space=EXCLUDED.embedding_space""",
-            (
-                user_id,
-                vector_sql(vector) if vector is not None else None,
-                space() if vector is not None else None,
-            ),
-        )
-    return {"user_id": user_id, "reaction_posts": len(vectors), "ready": vector is not None}
-
+    return vector
