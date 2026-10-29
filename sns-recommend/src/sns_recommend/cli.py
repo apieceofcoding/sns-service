@@ -6,7 +6,7 @@ from .baseline import baseline
 from .db import initialize, source_connection
 from .evaluation import evaluate
 from .events import Event, accept_event
-from .profiles import update_profile
+from .profiles import build_user_vector
 from .graph import start_graph
 from .indexing import index_posts
 from .ranking import generate
@@ -61,7 +61,9 @@ def main():
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
     elif args.command == "profile":
-        result = update_profile(args.user)
+        vector = build_user_vector(args.user)
+        result = {"user_id": args.user, "ready": vector is not None,
+                  "dimensions": len(vector) if vector is not None else 0}
     elif args.command == "index":
         result = index_posts()
     elif args.command == "embedding":

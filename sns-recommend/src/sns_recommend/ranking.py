@@ -11,7 +11,7 @@ from .db import connection, source_connection
 from .event_queue import allocate_generation
 from .feed import publish
 from .retrieval import retrieve_candidates
-from .profiles import update_profile
+from .profiles import build_user_vector
 
 PROMPT_VERSION = "sns-rank-behavior-v2"
 PROMPT = ChatPromptTemplate.from_messages(
@@ -32,8 +32,8 @@ class Ranking(BaseModel):
 
 
 def prepare_inputs(user_id):
-    update_profile(user_id)
-    candidates = retrieve_candidates(user_id)
+    user_vector = build_user_vector(user_id)
+    candidates = retrieve_candidates(user_id, user_vector=user_vector)
     with source_connection() as conn:
         history = conn.execute(
             """SELECT e.action,e.post_id,p.content AS body FROM recommend_events e JOIN posts p ON p.id=e.post_id WHERE e.user_id=%s AND p.deleted_at IS NULL

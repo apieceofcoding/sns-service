@@ -14,7 +14,7 @@ if existing and existing ~= ARGV[1] then return -1 end
 local current = redis.call('GET', KEYS[2])
 if current then
   local meta = cjson.decode(current)
-  if tonumber(meta.generation) > tonumber(ARGV[3]) then return 0 end
+  if tonumber(meta.generation or 0) > tonumber(ARGV[3]) then return 0 end
 end
 if not existing then redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) end
 redis.call('SET', KEYS[2], ARGV[4], 'EX', ARGV[2])
