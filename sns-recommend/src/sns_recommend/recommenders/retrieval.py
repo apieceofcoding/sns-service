@@ -5,11 +5,11 @@ from typing import cast
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
-from sns_recommend.data.profiles import build_user_vector
 from langchain_core.retrievers import BaseRetriever
 
 from sns_recommend.core.types import Candidate, DatabaseRow, GenerationResult
 from sns_recommend.data.events import excluded_ids
+from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.providers.embeddings import space, vector_sql
 from sns_recommend.storage import source
 from sns_recommend.storage.event_queue import allocate_generation, current_generation
@@ -18,8 +18,11 @@ from sns_recommend.storage.postgres import connection
 
 
 def retrieve_candidates(
-    user_id: int, k: int = 30, as_of: datetime | None = None,
-    *, user_vector: list[float] | None = None
+    user_id: int,
+    k: int = 30,
+    as_of: datetime | None = None,
+    *,
+    user_vector: list[float] | None = None,
 ) -> list[Candidate]:
     if not 1 <= k <= 50:
         raise ValueError("candidate count must be between 1 and 50")
@@ -36,7 +39,7 @@ def retrieve_candidates(
                 FROM post_embeddings WHERE space=%s AND post_id=ANY(%s)""",
                 (vector_sql(user_vector), space(), [p["id"] for p in posts]),
             ).fetchall()
-            if valid
+            if user_vector is not None
             else []
         )
     # A vector made from an older body is ignored until the post is indexed again.

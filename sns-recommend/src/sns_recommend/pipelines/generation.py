@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from sns_recommend.core.config import settings
 from sns_recommend.core.types import GenerationResult, RankingInput
+from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
 from sns_recommend.recommenders.retrieval import retrieve_candidates
-from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.storage.event_queue import allocate_generation, current_generation
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection, source_connection

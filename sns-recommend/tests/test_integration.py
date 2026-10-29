@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Never, cast
@@ -20,6 +19,7 @@ from sns_recommend.core.types import (
 )
 from sns_recommend.data.events import Event, accept_event
 from sns_recommend.data.indexing import index_posts
+from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.pipelines.graph import run_graph, start_graph
 from sns_recommend.providers.embeddings import (
@@ -29,7 +29,6 @@ from sns_recommend.providers.embeddings import (
     vector_sql,
 )
 from sns_recommend.recommenders.retrieval import retrieve_candidates
-from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.storage.event_queue import claim, enqueue, finish, retry
 from sns_recommend.storage.feeds import publish, read_feed
 from sns_recommend.storage.postgres import connection, source_connection
@@ -228,7 +227,7 @@ def test_profile_uses_recent_actions_instead_of_largest_post_ids(infra: None) ->
     assert vector == pytest.approx(recent, abs=1e-7)
 
 
-def test_stale_user_vector_is_not_used_for_similarity(infra: None) -> None:
+def test_absent_reactions_disable_semantic_search(infra: None) -> None:
     prepare()
     with source_connection() as conn:
         conn.execute(
@@ -282,7 +281,12 @@ def test_retrieval_includes_exact_48h_boundary_and_rejects_future(infra: None) -
                 (post_created_at(post_id, reference, group_size=6), post_id),
             )
     prepare()
-    ids = {p["id"] for p in retrieve_candidates(READER, user_vector=build_user_vector(READER), k=50, as_of=reference)}
+    ids = {
+        p["id"]
+        for p in retrieve_candidates(
+            READER, user_vector=build_user_vector(READER), k=50, as_of=reference
+        )
+    }
     assert ids == set(range(7, 19))
 
 
@@ -560,7 +564,6 @@ def test_behavior_only_seed_and_cold_start(infra: None) -> None:
     assert seed_actions() == {"actions": 0}
     index_posts()
     for user in [7, 8, 9]:
-        update_profile(user)
         candidates = retrieve_candidates(user, user_vector=build_user_vector(user))
         assert any(p["similarity"] is not None for p in candidates)
     with source_connection() as conn:

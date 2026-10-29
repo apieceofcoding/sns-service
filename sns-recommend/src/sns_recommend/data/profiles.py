@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
+from sns_recommend.providers.embeddings import normalize, space
 from sns_recommend.storage import source
 from sns_recommend.storage.postgres import connection, source_connection
-from sns_recommend.providers.embeddings import normalize, space
 
 
 def build_user_vector(user_id: int) -> list[float] | None:
