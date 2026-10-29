@@ -5,6 +5,7 @@ from uuid import uuid4
 from .baseline import baseline
 from .db import initialize, source_connection
 from .events import Event, accept_event
+from .profiles import update_profile
 from .indexing import index_posts
 from .seed import seed
 from .source_demo import change_post, seed_actions
@@ -23,6 +24,7 @@ def main():
             "seed-actions",
             "action",
             "index",
+            "profile",
         ],
     )
     parser.add_argument("--user", type=int, default=1)
@@ -49,6 +51,8 @@ def main():
         result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
+    elif args.command == "profile":
+        result = update_profile(args.user)
     elif args.command == "index":
         result = index_posts()
     else:
