@@ -213,7 +213,7 @@ uv run sns-recommend profile --user 8
 uv run sns-recommend profile --user 9
 ```
 
-`reaction_posts`는 계산에 사용한 글 수이며 `ready`는 벡터 준비 여부입니다. 유효한 반응 글이 없으면 `ready: false`로 표시하고 이전 벡터를 비워요. `profiles`에 저장한 벡터와 임베딩 공간은 다음 검색에서 사용합니다. 게시글 본문은 SNS DB에만 둡니다.
+`ready`는 벡터 준비 여부이고 `dimensions`는 계산한 벡터 차원입니다. 유효한 반응 글이 없으면 `ready: false`로 표시해요. 사용자 벡터는 메모리에서 계산하며 추천 DB에 저장하지 않습니다. 다음 검색 함수에 인자로 전달해요. `profiles.active_at`에는 조회 시각만 기록합니다. 게시글 본문은 SNS DB에만 둡니다.
 
 ### part-4. 후보 검색과 LLM 순위 결정
 
@@ -239,7 +239,7 @@ uv sync --locked
 uv run sns-recommend graph --user 7
 ```
 
-검색부터 추천 저장까지 실행합니다. 체크포인트 테이블은 자동으로 준비해요.
+검색부터 추천 저장까지 실행합니다. 이 단원에서 생성 번호와 발행 경쟁 제어를 도입하고, 체크포인트에 진행 상태를 저장해요. 체크포인트 테이블은 자동으로 준비합니다.
 
 ### part-6. 품질 평가
 
