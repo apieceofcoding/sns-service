@@ -22,7 +22,7 @@ def feed(
 ) -> FeedResponse:
     try:
         excluded = excluded_ids(user_id)
-        # Deleted posts are checked in the SNS database, only for the IDs this page can show.
+        # Deleted posts are checked in the SNS database for this page.
         result = read_feed(user_id, limit, cursor, excluded, alive=source.alive_ids)
         if not source.user_exists(user_id):
             raise HTTPException(404, "unknown user")
@@ -32,8 +32,8 @@ def feed(
                 ON CONFLICT(user_id) DO UPDATE SET active_at=now()""",
                 (user_id,),
             )
-            if not result["ready"] or result.get("stale") or not result["next_cursor"]:
-                result["refresh_event"] = enqueue("recommend.requested", user_id, throttle=True)
+        if not result["ready"] or result.get("stale") or not result["next_cursor"]:
+            result["refresh_event"] = enqueue("recommend.requested", user_id, throttle=True)
         return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
