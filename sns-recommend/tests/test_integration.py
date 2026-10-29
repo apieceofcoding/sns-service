@@ -28,7 +28,8 @@ from sns_recommend.providers.embeddings import (
     space,
     vector_sql,
 )
-from sns_recommend.recommenders.retrieval import retrieve_candidates, update_profile
+from sns_recommend.recommenders.retrieval import retrieve_candidates
+from sns_recommend.data.profiles import update_profile
 from sns_recommend.storage.event_queue import claim, enqueue, finish, retry
 from sns_recommend.storage.feeds import publish, read_feed
 from sns_recommend.storage.postgres import connection, source_connection

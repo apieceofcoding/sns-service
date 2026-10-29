@@ -5,6 +5,7 @@ import json
 from uuid import uuid4
 
 from sns_recommend.data.events import Event, accept_event
+from sns_recommend.data.profiles import update_profile
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.seed import seed
 from sns_recommend.data.source_demo import change_post, seed_actions
@@ -31,6 +32,7 @@ def main() -> None:
             "seed-actions",
             "action",
             "index",
+            "profile",
             "embedding",
             "generate",
             "graph",
@@ -65,6 +67,8 @@ def main() -> None:
         result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
+    elif args.command == "profile":
+        result = update_profile(args.user)
     elif args.command == "index":
         result = index_posts()
     elif args.command == "embedding":
