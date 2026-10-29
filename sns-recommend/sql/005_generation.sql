@@ -1,0 +1,1 @@
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS generation bigint NOT NULL DEFAULT 0;

@@ -1,38 +1,31 @@
 from datetime import datetime, timezone
 
 from langchain_core.documents import Document
-from .profiles import update_profile
+from .profiles import build_user_vector
 from langchain_core.retrievers import BaseRetriever
 
 from . import source
 from .db import connection
-from .embeddings import space
+from .embeddings import space, vector_sql
 from .event_queue import allocate_generation
 from .events import excluded_ids
 from .feed import publish
 
 
-def retrieve_candidates(user_id, k=30, as_of=None):
+def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     reference = as_of or datetime.now(timezone.utc)
     posts = source.recent_posts(user_id, reference)
     with connection() as conn:
-        profile = conn.execute(
-            """SELECT embedding::text,embedding_space
-            FROM profiles WHERE user_id=%s""",
-            (user_id,),
-        ).fetchone()
-        valid = bool(
-            profile and profile["embedding"] is not None and profile["embedding_space"] == space()
-        )
+        valid = user_vector is not None
         excluded = excluded_ids(user_id)
         similar = (
             conn.execute(
                 """SELECT post_id,content_version,
             1-(embedding <=> %s::vector) AS similarity FROM post_embeddings
             WHERE space=%s AND post_id=ANY(%s)""",
-                (profile["embedding"], space(), [p["id"] for p in posts]),
+                (vector_sql(user_vector), space(), [p["id"] for p in posts]),
             ).fetchall()
             if valid
             else []
@@ -68,17 +61,18 @@ def retrieve_candidates(user_id, k=30, as_of=None):
 class PostRetriever(BaseRetriever):
     user_id: int
     k: int = 30
+    user_vector: list[float] | None = None
 
     def _get_relevant_documents(self, query, *, run_manager):
         return [
             Document(page_content=p["body"], metadata={k: v for k, v in p.items() if k != "body"})
-            for p in retrieve_candidates(self.user_id, self.k)
+            for p in retrieve_candidates(self.user_id, self.k, user_vector=self.user_vector)
         ]
 
 
 def generate_embedding(user_id):
-    update_profile(user_id)
-    docs = PostRetriever(user_id=user_id).invoke("recent reactions")
+    user_vector = build_user_vector(user_id)
+    docs = PostRetriever(user_id=user_id, user_vector=user_vector).invoke("recent reactions")
     with connection() as conn:
         generation = allocate_generation(conn, user_id)
     ids = [d.metadata["id"] for d in docs]
