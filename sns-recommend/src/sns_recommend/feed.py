@@ -8,50 +8,24 @@ from redis import Redis
 
 from .config import settings
 
-PUBLISH = """
-local existing = redis.call('GET', KEYS[1])
-if existing and existing ~= ARGV[1] then return -1 end
-local current = redis.call('GET', KEYS[2])
-if current then
-  local meta = cjson.decode(current)
-  if tonumber(meta.generation) > tonumber(ARGV[3]) then return 0 end
-end
-if not existing then redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) end
-redis.call('SET', KEYS[2], ARGV[4], 'EX', ARGV[2])
-return 1
-"""
-
-
 def redis_client():
     return Redis.from_url(
         settings().redis_url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1
     )
 
 
-def publish(user_id, ids, strategy, generation, snapshot_id=None, created_at=None):
-    snapshot_id = snapshot_id or uuid4().hex
+def publish(user_id, ids, strategy):
+    snapshot_id = uuid4().hex
     payload = {
-        "snapshot_id": snapshot_id,
-        "user_id": user_id,
-        "ids": ids,
-        "strategy": strategy,
-        "generation": generation,
-        "created_at": created_at or time.time(),
+        "snapshot_id": snapshot_id, "user_id": user_id, "ids": ids,
+        "strategy": strategy, "created_at": time.time(),
     }
-    encoded = json.dumps(payload, sort_keys=True)
-    code = redis_client().eval(
-        PUBLISH,
-        2,
-        f"recommend:feed:{user_id}:{snapshot_id}",
-        f"recommend:current:{user_id}",
-        encoded,
-        settings().snapshot_ttl,
-        generation,
-        encoded,
-    )
-    if code == -1:
-        raise ValueError("snapshotId reused with different content")
-    return code == 1
+    encoded = json.dumps(payload)
+    with redis_client().pipeline() as pipe:
+        pipe.set(f"recommend:feed:{user_id}:{snapshot_id}", encoded, ex=settings().snapshot_ttl)
+        pipe.set(f"recommend:current:{user_id}", encoded, ex=settings().snapshot_ttl)
+        pipe.execute()
+    return True
 
 
 def cursor_encode(user_id, snapshot_id, offset):

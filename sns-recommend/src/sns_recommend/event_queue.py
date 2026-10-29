@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -115,22 +114,6 @@ def retry(event: EventRecord) -> None:
             WHERE id=%s AND claim_id=%s AND processed_at IS NULL""",
             (event["id"], event["claim_id"]),
         )
-
-
-def allocate_generation(conn: Any, user_id: int) -> int:
-    row = conn.execute(
-        """INSERT INTO profiles(user_id,generation) VALUES (%s,%s)
-        ON CONFLICT(user_id) DO UPDATE SET generation=GREATEST(profiles.generation+1,EXCLUDED.generation) RETURNING generation""",
-        (user_id, time.time_ns() // 1000),
-    ).fetchone()
-    return row["generation"]
-
-
-def current_generation(conn: Any, user_id: int) -> int:
-    conn.execute("INSERT INTO profiles(user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
-    return conn.execute(
-        "SELECT generation FROM profiles WHERE user_id=%s FOR UPDATE", (user_id,)
-    ).fetchone()["generation"]
 
 
 def migrate_legacy() -> None:
