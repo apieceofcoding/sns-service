@@ -1,6 +1,6 @@
 # SNS 추천 서비스 실습
 
-추천을 생성해 Redis에 저장하고 FastAPI로 조회합니다. **part-1부터 part-8까지 순서대로 진행해요.** 기본 실습에는 모델 API 키가 필요 없습니다.
+추천을 생성해 Redis에 저장하고 FastAPI로 조회합니다. **part-1부터 part-7까지 순서대로 진행해요.** 기본 실습에는 모델 API 키가 필요 없습니다.
 
 | 폴더 | 역할 |
 |---|---|
@@ -192,7 +192,7 @@ curl -fsS http://localhost:8001/internal/feeds/7
 
 추천 목록이 없거나 오래됐거나 마지막 페이지이면 기존 응답을 반환하면서 갱신을 예약해요. 조회는 모델을 호출하지 않습니다. 조회와 주기 예약은 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합칩니다. 클릭과 좋아요에 따른 예약도 같은 대기 요청을 재사용해요.
 
-주기 예약 규칙도 여기서 정의합니다. 최근 30분 내 조회했고 최근 5분 내 갱신 요청이 없는 사용자를 대상으로 해요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 6단원에서 연결합니다. 8단원에서는 같은 규칙을 주기적으로 실행하고 간격과 비용을 검증해요.
+주기 예약 규칙도 여기서 정의합니다. 최근 30분 내 조회했고 최근 5분 내 갱신 요청이 없는 사용자를 대상으로 해요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 5단원에서 연결합니다. 7단원에서는 같은 규칙을 주기적으로 실행하고 간격과 비용을 검증해요.
 
 ```sql
 -- SNS DB에서 기록과 처리 상태 확인
@@ -203,52 +203,59 @@ ORDER BY created_at DESC, id DESC LIMIT 20;
 
 `recommend.requested`는 이벤트 worker가 처리하지 않으므로 대기 상태가 정상입니다. 과거 호환용 `profile.updated`는 새로 생성하지 않습니다.
 
-### part-4. 행동 기반 검색
+#### 사용자 벡터 준비
+
+최근 7일 클릭과 좋아요를 누른 서로 다른 글 20개 중, 원본 버전과 임베딩 공간이 일치하는 최대 5개 벡터를 평균내 정규화합니다. 글 벡터를 재사용하므로 새 모델 호출은 없어요.
 
 ```sh
-git switch part-4-retrieval
-uv sync --locked
-uv run sns-recommend init
-uv run sns-recommend embedding --user 7
+uv run sns-recommend profile --user 7
+uv run sns-recommend profile --user 8
+uv run sns-recommend profile --user 9
 ```
 
-클릭과 좋아요에 맞는 추천 ID를 확인합니다.
+`reaction_posts`는 계산에 사용한 글 수이며 `ready`는 벡터 준비 여부입니다. 유효한 반응 글이 없으면 `ready: false`로 표시하고 이전 벡터를 비워요. `profiles`에 저장한 벡터와 임베딩 공간은 다음 검색에서 사용합니다. 게시글 본문은 SNS DB에만 둡니다.
 
-### part-5. 재정렬
+### part-4. 후보 검색과 LLM 순위 결정
 
 ```sh
-git switch part-5-reranking
+git switch part-4-reranking
 uv sync --locked
+uv run sns-recommend init
+# 후보 검색 결과를 Redis에 저장해 확인
+uv run sns-recommend embedding --user 7
+# 같은 검색 규칙으로 후보를 준비하고 LLM으로 재정렬
 uv run sns-recommend generate --user 7
 ```
 
-재정렬한 추천 ID를 확인해요.
+의미 검색, 최신순과 인기순 후보를 합치고 본인 글, 삭제 글, 이미 본 글과 관심 없음을 제외합니다. 행동이 없으면 최신순과 인기순으로 시작해요. 검색에서 빠진 글은 LLM이 선택할 수 없으므로 후보를 먼저 확인합니다.
 
-### part-6. LangGraph
+`embedding`과 `generate`는 실행 시 최신 행동으로 사용자 벡터를 다시 계산합니다. 새 모델 호출 없이 3단원의 함수를 재사용해요. `generate`는 후보만 LLM에 보내고, 반환 ID 검증과 다양성 조정을 거쳐 Redis에 저장합니다. 오류가 나면 후보 순위로 대체해요.
+
+### part-5. LangGraph
 
 ```sh
-git switch part-6-langgraph
+git switch part-5-langgraph
 uv sync --locked
 uv run sns-recommend graph --user 7
 ```
 
 검색부터 추천 저장까지 실행합니다. 체크포인트 테이블은 자동으로 준비해요.
 
-### part-7. 품질 평가
+### part-6. 품질 평가
 
 ```sh
-git switch part-7-evaluation
+git switch part-6-evaluation
 uv sync --locked
 uv run sns-recommend evaluate
 ```
 
 `sns-recommend/reports/evaluation.json`에서 합성 데이터의 전략별 점수를 비교합니다.
 
-### part-8. 갱신 주기와 조회 비용 검증
+### part-7. 갱신 주기와 조회 비용 검증
 
 ```sh
 # SNS 앱 다시 빌드
-git switch part-8-resilience
+git switch part-7-resilience
 cd ../sns-app
 ./gradlew jibDockerBuild
 docker compose up -d --wait
@@ -355,4 +362,4 @@ Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 
 
 OpenAI API는 강사용 비교 선택입니다. 서버 주소, 모델명과 키를 계정에서 사용 가능한 값으로 바꿔요. 수강생 기본 실습은 OpenAI 결제를 요구하지 않습니다. 키와 녹화 파일은 Git에 넣지 않습니다.
 
-7단원은 합성 정답셋 평가, 8단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
+6단원은 합성 정답셋 평가, 7단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
