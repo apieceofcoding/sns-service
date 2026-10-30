@@ -5,7 +5,7 @@
 | 폴더 | 역할 |
 |---|---|
 | [sns-front](sns-front/README.md) | SNS 화면 |
-| [sns-app](sns-app/README.md) | 로그인, 게시글과 피드 API |
+| [sns-app](sns-app/README.md) | 로그인, 게시글, 행동 수집과 피드 API |
 | [sns-recommend](sns-recommend/README.md) | 추천 생성과 조회 API |
 
 <details>
@@ -143,6 +143,11 @@ git switch part-3-events-indexing
 uv sync --locked
 docker compose up -d --wait
 uv run sns-recommend init
+# 행동 수집 코드가 추가된 SNS 앱 다시 실행
+cd ../sns-app
+./gradlew jibDockerBuild
+docker compose up -d --wait --force-recreate app
+cd ../sns-recommend
 uv run sns-recommend index
 ```
 
@@ -162,23 +167,27 @@ uv run sns-recommend-event-worker
 
 #### 행동과 추천 갱신 기록
 
-이 단원에서 이벤트 종류와 저장 경로를 완성합니다. 이후 단원은 같은 기록으로 후보와 순위를 만들어요. SNS 화면의 행동 자동 전송은 포함하지 않으며 API 또는 CLI로 기록합니다.
+이 단원에서 이벤트 종류와 저장 경로를 완성합니다. 이후 단원은 같은 기록으로 후보와 순위를 만들어요. 행동 수집은 sns-app이 담당합니다. 클릭과 노출의 화면 자동 전송은 별도 범위이며, 아래 요청으로 확인해요.
 
 | action | 생성 경로 | 처리 |
 |---|---|---|
 | `post.updated` | 글 작성과 본문 수정 → SNS DB 트리거 | 글 벡터 갱신 |
 | `post.deleted` | 글의 `deleted_at` 변경 → SNS DB 트리거 | 검색 벡터에 삭제 반영 |
-| `impression` | 이벤트 API 또는 `action` CLI | 이미 본 글 제외 |
-| `click`, `like` | 이벤트 API 또는 CLI. `seed-actions`는 좋아요 기록 | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
-| `not_interested` | 이벤트 API 또는 `action` CLI | 관심 없는 글 제외 |
+| `impression` | SNS 행동 API | 이미 본 글 제외 |
+| `click` | SNS 행동 API | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
+| `like` | 기존 좋아요 API. 좋아요와 이벤트를 같은 트랜잭션에 저장 | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
+| `not_interested` | SNS 행동 API | 관심 없는 글 제외 |
 | `recommend.requested` | 피드 조회, 클릭과 좋아요 처리, 주기 예약 또는 명시적 생성 명령 | 사용자별 추천 생성 예약 |
 
-글 변경은 원본 저장과 같은 트랜잭션에서 기록합니다. 이벤트 API는 `POST /internal/events`이며, CLI는 같은 저장 함수를 직접 호출해요. 같은 이벤트 ID의 재전송은 중복 저장하지 않습니다.
+글 변경은 DB 트리거가 원본 저장과 같은 트랜잭션에서 기록합니다. 좋아요는 기존 `POST /api/v1/likes`에서 이벤트까지 함께 저장해요. 클릭, 노출과 관심 없음은 `POST /api/v1/recommend/actions`로 받습니다. 사용자 ID는 로그인 세션에서 읽고, 재전송은 같은 eventId를 사용합니다. `seed-actions`는 독자별 합성 이력을 만드는 준비 명령입니다.
 
 ```sh
-# SNS 화면 대신 CLI로 노출과 클릭 기록
-uv run sns-recommend action --user 7 --post 1 --action impression
-uv run sns-recommend action --user 7 --post 4 --action click
+# 로그인 쿠키 저장 (1단원에서 가입한 계정)
+curl -fsS -c cookies.txt -X POST http://localhost:8080/api/v1/login -d 'username=recommenddemo&password=recommend1234'
+# 클릭 기록. 같은 행동을 재전송할 때는 같은 eventId 사용
+curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions -H 'Content-Type: application/json' -d '{"eventId":"03b9e8fe-a243-48b8-9048-11c48ce52001","action":"click","postId":4}'
+# 좋아요와 추천 이벤트를 함께 저장
+curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/likes -H 'Content-Type: application/json' -d '{"postId":1}'
 uv run sns-recommend-event-worker --once
 
 # 2단원에서 실행한 추천 API를 종료하고 새 터미널에서 다시 실행
