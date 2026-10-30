@@ -1,7 +1,7 @@
 from uuid import uuid4
 import pytest
 from pydantic import ValidationError
-from sns_recommend.events import Event
+from event_fixtures import Event
 
 
 def test_event_requires_its_target():
@@ -17,3 +17,10 @@ def test_event_never_carries_content():
     with pytest.raises(ValidationError):
         Event.model_validate({"event_id": uuid4(), "action": "post.updated", "post_id": 3,
                               "payload": {"body": "Python"}})
+
+
+def test_action_api_belongs_to_sns_app():
+    from fastapi.testclient import TestClient
+    from sns_recommend.api import app
+
+    assert TestClient(app).post("/internal/events", json={}).status_code == 404
