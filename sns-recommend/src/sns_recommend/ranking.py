@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field, StrictInt
 from .config import settings
 from .db import source_connection
 from .feed import publish
-from .retrieval import retrieve_candidates
 from .profiles import build_user_vector
+from .retrieval import retrieve_candidates
 
 PROMPT_VERSION = "sns-rank-behavior-v2"
 PROMPT = ChatPromptTemplate.from_messages(

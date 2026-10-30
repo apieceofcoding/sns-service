@@ -8,6 +8,7 @@ from redis import Redis
 
 from .config import settings
 
+
 def redis_client():
     return Redis.from_url(
         settings().redis_url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1
@@ -17,8 +18,11 @@ def redis_client():
 def publish(user_id, ids, strategy):
     snapshot_id = uuid4().hex
     payload = {
-        "snapshot_id": snapshot_id, "user_id": user_id, "ids": ids,
-        "strategy": strategy, "created_at": time.time(),
+        "snapshot_id": snapshot_id,
+        "user_id": user_id,
+        "ids": ids,
+        "strategy": strategy,
+        "created_at": time.time(),
     }
     encoded = json.dumps(payload)
     with redis_client().pipeline() as pipe:

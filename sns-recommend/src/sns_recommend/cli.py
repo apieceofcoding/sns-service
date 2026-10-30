@@ -1,12 +1,10 @@
 import argparse
 import json
-from uuid import uuid4
 
 from .baseline import baseline
 from .db import initialize, source_connection
-from .events import Event, accept_event
-from .profiles import build_user_vector
 from .indexing import index_posts
+from .profiles import build_user_vector
 from .ranking import generate
 from .retrieval import generate_embedding
 from .seed import seed
@@ -24,7 +22,6 @@ def main():
             "baseline",
             "source-post",
             "seed-actions",
-            "action",
             "index",
             "profile",
             "embedding",
@@ -35,9 +32,6 @@ def main():
     parser.add_argument("--strategy", choices=["latest", "popular"], default="latest")
     parser.add_argument("--post", type=int, default=1001)
     parser.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
-    parser.add_argument(
-        "--action", choices=["impression", "click", "like", "not_interested"], default="like"
-    )
     args = parser.parse_args()
     if args.command == "init":
         initialize()
@@ -47,18 +41,17 @@ def main():
         result = seed()
     elif args.command == "baseline":
         result = baseline(args.user, args.strategy)
-    elif args.command == "action":
-        result = accept_event(
-            Event(event_id=uuid4(), action=args.action, user_id=args.user, post_id=args.post)
-        )
     elif args.command == "seed-actions":
         result = seed_actions()
     elif args.command == "source-post":
         result = change_post(args.post, args.body)
     elif args.command == "profile":
         vector = build_user_vector(args.user)
-        result = {"user_id": args.user, "ready": vector is not None,
-                  "dimensions": len(vector) if vector is not None else 0}
+        result = {
+            "user_id": args.user,
+            "ready": vector is not None,
+            "dimensions": len(vector) if vector is not None else 0,
+        }
     elif args.command == "index":
         result = index_posts()
     elif args.command == "embedding":

@@ -1,12 +1,11 @@
 import psycopg
-
 from fastapi import FastAPI, HTTPException, Query
 from redis.exceptions import RedisError
 
 from . import source
 from .db import connection
 from .event_queue import enqueue
-from .events import Event, accept_event, excluded_ids
+from .events import excluded_ids
 from .feed import read_feed
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
@@ -40,11 +39,3 @@ def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None =
         raise HTTPException(410, str(exc)) from exc
     except (RedisError, psycopg.Error) as exc:
         raise HTTPException(503, "feed unavailable; SNS should serve latest") from exc
-
-
-@app.post("/internal/events")
-def events(event: Event):
-    try:
-        return accept_event(event)
-    except LookupError as exc:
-        raise HTTPException(404, str(exc)) from exc
