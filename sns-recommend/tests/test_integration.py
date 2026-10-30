@@ -17,7 +17,7 @@ from sns_recommend.core.types import (
     RankingInput,
     RankingResult,
 )
-from sns_recommend.data.events import Event, accept_event
+from event_fixtures import Event, accept_event
 from sns_recommend.data.indexing import index_posts
 from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.data.source_demo import change_post, seed_actions

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Never
 from uuid import uuid4
 
 import pytest
@@ -8,7 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from sns_recommend.api import app
-from sns_recommend.data.events import Event
+from event_fixtures import Event
 
 
 def test_event_requires_its_target() -> None:
@@ -38,20 +37,5 @@ def test_invalid_events_are_rejected(changes: dict[str, object]) -> None:
         Event.model_validate({**event, **changes})
 
 
-def test_event_with_content_never_reaches_database(monkeypatch: pytest.MonkeyPatch) -> None:
-    def forbidden(*args: object) -> Never:
-        raise AssertionError("invalid request reached database")
-
-    monkeypatch.setattr("sns_recommend.api.routers.events.accept_event", forbidden)
-    response = TestClient(app).post(
-        "/internal/events",
-
-        json={
-            "event_id": str(uuid4()),
-            "action": "like",
-            "post_id": 1,
-            "user_id": 1,
-            "payload": {"body": "Python"},
-        },
-    )
-    assert response.status_code == 422
+def test_action_ingestion_is_not_exposed_by_recommend_api() -> None:
+    assert TestClient(app).post("/internal/events", json={}).status_code == 404

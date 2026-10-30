@@ -79,11 +79,6 @@ class PausedResult(TypedDict):
     next: str
 
 
-class EventResult(TypedDict):
-    accepted: bool
-    duplicate: bool
-
-
 class EventRecord(TypedDict):
     id: UUID
     action: str
