@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 from langchain_core.documents import Document
-from .profiles import build_user_vector
 from langchain_core.retrievers import BaseRetriever
 
 from . import source
@@ -10,6 +9,7 @@ from .embeddings import space, vector_sql
 from .event_queue import allocate_generation
 from .events import excluded_ids
 from .feed import publish
+from .profiles import build_user_vector
 
 
 def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):

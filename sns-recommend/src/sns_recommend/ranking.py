@@ -10,8 +10,8 @@ from .config import settings
 from .db import connection, source_connection
 from .event_queue import allocate_generation
 from .feed import publish
-from .retrieval import retrieve_candidates
 from .profiles import build_user_vector
+from .retrieval import retrieve_candidates
 
 PROMPT_VERSION = "sns-rank-behavior-v2"
 PROMPT = ChatPromptTemplate.from_messages(
