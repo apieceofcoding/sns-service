@@ -157,13 +157,13 @@ uv run sns-recommend index
 # 글 변경과 독자별 좋아요 6개 기록
 uv run sns-recommend source-post --post 1001
 uv run sns-recommend seed-actions
-# SNS DB와 비교해 user_events와 글 벡터에 반영
+# SNS DB에서 바뀐 행만 읽어 user_events와 글 벡터에 반영
 uv run sns-recommend-event-worker --once
 # 별도 터미널에서 계속 처리
 uv run sns-recommend-event-worker
 ```
 
-이벤트 worker가 SNS DB의 원본을 읽어 추천 DB에 옮겨요. 바뀐 것이 없으면 `--once` 결과의 `processed`가 0입니다.
+이벤트 worker가 테이블별로 마지막 위치 이후 바뀐 행만 읽어 추천 DB에 옮겨요. 위치는 `sync_cursors`에 저장하고, 늦게 커밋되는 변경을 놓치지 않도록 최근 60초는 다시 읽습니다. 글이 늘어도 한 주기의 읽기 양은 변경량만큼만 늘어요. 바뀐 것이 없으면 `--once` 결과의 `processed`가 0입니다.
 
 #### 행동과 추천 갱신 기록
 
@@ -319,7 +319,7 @@ docker compose up -d --wait  # part-2부터
 | 저장소 | 내용 | 연결 설정 |
 |---|---|---|
 | SNS DB (`snsdb`, 5432) | 회원, 게시글, 좋아요 원본과 post_actions | `SOURCE_DATABASE_URL` |
-| 추천 DB (`recommend`, 55432) | user_events, 글 벡터와 체크포인트 | `DATABASE_URL` |
+| 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터와 체크포인트 | `DATABASE_URL` |
 | Redis (56379) | 완성된 추천 ID 목록 | `REDIS_URL` |
 
 본문은 SNS DB에서 읽어요. 글 변경 이벤트에는 ID와 버전만 담고, worker가 원본을 읽어 벡터를 갱신합니다.
