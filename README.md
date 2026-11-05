@@ -230,9 +230,9 @@ uv run sns-recommend init
 # 후보 검색 결과를 Redis에 저장해 확인
 uv run sns-recommend embedding --user 7
 # LangGraph로 후보 검색, LLM 재정렬, 검증, 다양성 조정과 발행을 실행
-uv run sns-recommend graph --user 7
+uv run sns-recommend graph --user 8
 # 재정렬 직후 멈춘 뒤 worker로 이어서 실행
-uv run sns-recommend graph --user 8 --pause-after-rerank
+uv run sns-recommend graph --user 7 --pause-after-rerank
 uv run python -m sns_recommend.worker --once
 ```
 
