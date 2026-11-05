@@ -10,19 +10,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from .config import settings
-
-type GraphResult = dict[str, Any]
-type EventRecord = dict[str, Any]
-type PausedResult = dict[str, Any]
-type RankingInput = dict[str, Any]
-type RankingResult = dict[str, Any]
-from .ranking import prepare_inputs, rerank_candidates
-
-
-def ranking_strategy(mode: str) -> str:
-    return {"fixture": "fixture_llm", "replay": "replay_llm"}.get(mode, "llm")
-
-
 from .db import connection
 from .event_queue import (
     allocate_generation,
@@ -34,9 +21,19 @@ from .event_queue import (
     renew,
 )
 from .feed import publish
-from .ranking import diversify, validate_ranking
+from .ranking import diversify, prepare_inputs, rerank_candidates, validate_ranking
+
+type GraphResult = dict[str, Any]
+type EventRecord = dict[str, Any]
+type PausedResult = dict[str, Any]
+type RankingInput = dict[str, Any]
+type RankingResult = dict[str, Any]
 
 GRAPH_VERSION = "sns-feed-behavior-v3"
+
+
+def ranking_strategy(mode: str) -> str:
+    return {"fixture": "fixture_llm", "replay": "replay_llm"}.get(mode, "llm")
 
 
 class FeedState(TypedDict, total=False):
