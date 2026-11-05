@@ -6,8 +6,9 @@ from typing import Annotated
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, StrictInt
 
+from . import source
 from .config import settings
-from .db import source_connection
+from .db import connection
 from .feed import publish
 from .profiles import build_user_vector
 from .retrieval import retrieve_candidates
@@ -33,13 +34,17 @@ class Ranking(BaseModel):
 def prepare_inputs(user_id):
     user_vector = build_user_vector(user_id)
     candidates = retrieve_candidates(user_id, user_vector=user_vector)
-    with source_connection() as conn:
-        history = conn.execute(
-            """SELECT e.action,e.post_id,p.content AS body FROM recommend_events e JOIN posts p ON p.id=e.post_id WHERE e.user_id=%s AND p.deleted_at IS NULL
-            AND e.created_at<=now() AND e.action IN ('click','like','not_interested')
-            ORDER BY e.created_at DESC LIMIT 10""",
+    with connection() as conn:
+        actions = conn.execute(
+            """SELECT action,post_id FROM user_events WHERE user_id=%s AND removed_at IS NULL
+            AND action IN ('click','like','reply','repost')
+            ORDER BY occurred_at DESC LIMIT 10""",
             (user_id,),
         ).fetchall()
+    bodies = source.post_bodies([row["post_id"] for row in actions])
+    history = [
+        {**row, "body": bodies[row["post_id"]]} for row in actions if row["post_id"] in bodies
+    ]
     return {
         "user_id": user_id,
         "history": history,

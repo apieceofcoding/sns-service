@@ -4,10 +4,8 @@ import math
 from pathlib import Path
 
 from langchain_core.embeddings import Embeddings
-from psycopg.types.json import Jsonb
 
 from .config import settings
-from .db import connection
 
 KEYWORDS = [
     ["python", "fastapi", "postgresql", "백엔드", "데이터베이스"],
@@ -49,51 +47,30 @@ class FixtureEmbeddings(Embeddings):
         return self.embed_documents([text])[0]
 
 
-class CachedEmbeddings(Embeddings):
+class ModelEmbeddings(Embeddings):
     def embed_documents(self, texts):
         cfg = settings()
-        keys = [hashlib.sha256((space() + t).encode()).hexdigest() for t in texts]
-        result = [None] * len(texts)
-        with connection() as conn:
-            for i, key in enumerate(keys):
-                row = conn.execute(
-                    "SELECT embedding FROM embedding_cache WHERE key=%s", (key,)
-                ).fetchone()
-                if row:
-                    result[i] = row["embedding"]
-        missing = [i for i, value in enumerate(result) if value is None]
-        if missing:
-            source = [texts[i] for i in missing]
-            path = Path(cfg.recordings_dir) / (
-                hashlib.sha256(json.dumps(source, ensure_ascii=False).encode()).hexdigest()
-                + "-emb.json"
-            )
-            if cfg.model_mode == "fixture":
-                vectors = FixtureEmbeddings().embed_documents(source)
-            elif cfg.model_mode == "replay":
-                data = json.loads(path.read_text())
-                if data["space"] != space() or data["texts"] != source:
-                    raise ValueError("recording input/model mismatch")
-                vectors = data["vectors"]
-            else:
-                from .model_api import embed
+        path = Path(cfg.recordings_dir) / (
+            hashlib.sha256(json.dumps(texts, ensure_ascii=False).encode()).hexdigest()
+            + "-emb.json"
+        )
+        if cfg.model_mode == "fixture":
+            vectors = FixtureEmbeddings().embed_documents(texts)
+        elif cfg.model_mode == "replay":
+            data = json.loads(path.read_text())
+            if data["space"] != space() or data["texts"] != texts:
+                raise ValueError("recording input/model mismatch")
+            vectors = data["vectors"]
+        else:
+            from .model_api import embed
 
-                vectors = embed(source)
-                if cfg.model_mode == "record":
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(
-                        json.dumps({"space": space(), "texts": source, "vectors": vectors})
-                    )
-            if len(vectors) != len(missing) or any(len(v) != cfg.dimensions for v in vectors):
-                raise ValueError("embedding count/dimensions mismatch")
-            with connection() as conn:
-                for i, vector in zip(missing, vectors, strict=True):
-                    result[i] = normalize(vector)
-                    conn.execute(
-                        "INSERT INTO embedding_cache VALUES (%s,%s) ON CONFLICT DO NOTHING",
-                        (keys[i], Jsonb(result[i])),
-                    )
-        return result
+            vectors = embed(texts)
+            if cfg.model_mode == "record":
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({"space": space(), "texts": texts, "vectors": vectors}))
+        if len(vectors) != len(texts) or any(len(v) != cfg.dimensions for v in vectors):
+            raise ValueError("embedding count/dimensions mismatch")
+        return [normalize(vector) for vector in vectors]
 
     def embed_query(self, text):
         return self.embed_documents([text])[0]

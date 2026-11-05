@@ -32,6 +32,11 @@ def publish(user_id, ids, strategy):
     return True
 
 
+def current_created_at(user_id):
+    raw = redis_client().get(f"recommend:current:{user_id}")
+    return json.loads(raw)["created_at"] if raw else None
+
+
 def cursor_encode(user_id, snapshot_id, offset):
     raw = json.dumps([user_id, snapshot_id, offset], separators=(",", ":")).encode()
     signature = hmac.digest(settings().cursor_secret.encode(), raw, "sha256")

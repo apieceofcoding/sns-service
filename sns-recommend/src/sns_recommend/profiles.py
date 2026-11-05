@@ -3,23 +3,22 @@ from __future__ import annotations
 import json
 
 from . import source
-from .db import connection, source_connection
+from .db import connection
 from .embeddings import normalize, space
 
 
 def build_user_vector(user_id: int) -> list[float] | None:
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
-    with source_connection() as conn:
+    with connection() as conn:
         rows = conn.execute(
-            """SELECT post_id FROM recommend_events WHERE user_id=%s
-            AND action IN ('like','click') AND created_at<=now()
-            AND created_at>now()-interval '7 days' GROUP BY post_id
-            ORDER BY max(created_at) DESC,post_id DESC LIMIT 20""",
+            """SELECT post_id FROM user_events WHERE user_id=%s
+            AND action IN ('like','reply','repost','click') AND removed_at IS NULL
+            AND occurred_at>now()-interval '7 days' GROUP BY post_id
+            ORDER BY max(occurred_at) DESC,post_id DESC LIMIT 20""",
             (user_id,),
         ).fetchall()
-    ids = [r["post_id"] for r in rows]
-    with connection() as conn:
+        ids = [r["post_id"] for r in rows]
         rows = conn.execute(
             """SELECT post_id,content_version,embedding::text FROM post_embeddings
             WHERE post_id=ANY(%s) AND space=%s""",

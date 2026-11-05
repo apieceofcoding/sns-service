@@ -26,6 +26,7 @@ import type { Post } from "@/lib/types"
 import { useLikePost, useUnlikePost } from "@/hooks/api/use-likes"
 import { useDeletePost, useIncrementView } from "@/hooks/api/use-posts"
 import { useAuth } from "@/hooks/api/use-auth"
+import { postsApi } from "@/lib/api/posts"
 import { RepostMenu } from "./repost-menu"
 import { QuoteDialog } from "./quote-dialog"
 import { ReplyDialog } from "./reply-dialog"
@@ -65,6 +66,7 @@ export function TweetCard({ post, showThread = false, isThreadChild = false }: T
             // 재게시인 경우 원본 게시글의 조회수도 증가
             const targetId = post.repostedPost?.id || post.id
             incrementView.mutate(targetId)
+            if (user) postsApi.recordAction("impression", targetId)
             // 한 번 조회되면 옵저버 해제
             observer.unobserve(article)
           }
@@ -102,6 +104,7 @@ export function TweetCard({ post, showThread = false, isThreadChild = false }: T
 
   const handleCardClick = () => {
     const targetPost = post.repostedPost || post
+    if (user) postsApi.recordAction("click", targetPost.id)
     router.push(`/post/${targetPost.id}`)
   }
 

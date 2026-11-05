@@ -1,26 +1,26 @@
-from uuid import uuid4
+
 import pytest
-from pydantic import ValidationError
-from event_fixtures import Event
+from fastapi.testclient import TestClient
+
+from sns_recommend import api
 
 
-def test_event_requires_its_target():
-    assert Event(event_id=uuid4(), action="post.updated", post_id=3, version=2).version == 2
-    with pytest.raises(ValidationError):
-        Event(event_id=uuid4(), action="post.updated", version=2)
-    with pytest.raises(ValidationError):
-        Event(event_id=uuid4(), action="like", user_id=1)
+def test_recommend_service_has_no_event_api() -> None:
+    assert TestClient(api.app).post("/internal/events", json={}).status_code == 404
 
 
-def test_event_never_carries_content():
-    # The worker reads the body from the SNS database by post ID.
-    with pytest.raises(ValidationError):
-        Event.model_validate({"event_id": uuid4(), "action": "post.updated", "post_id": 3,
-                              "payload": {"body": "Python"}})
-
-
-def test_action_api_belongs_to_sns_app():
-    from fastapi.testclient import TestClient
-    from sns_recommend.api import app
-
-    assert TestClient(app).post("/internal/events", json={}).status_code == 404
+@pytest.mark.parametrize("ready,stale,cursor", [(False, False, None), (True, True, None)])
+def test_feed_read_only_reads(
+    monkeypatch: pytest.MonkeyPatch, ready: bool, stale: bool, cursor: str | None
+) -> None:
+    monkeypatch.setattr(api, "excluded_ids", lambda user: set())
+    monkeypatch.setattr(api.source, "user_exists", lambda user: True)
+    monkeypatch.setattr(
+        api,
+        "read_feed",
+        lambda *a, **kw: {"ready": ready, "stale": stale, "post_ids": [], "next_cursor": cursor},
+    )
+    response = TestClient(api.app).get("/internal/feeds/7")
+    assert response.status_code == 200
+    assert "refresh_event" not in response.json()
+    assert not hasattr(api, "enqueue") and not hasattr(api, "connection")
