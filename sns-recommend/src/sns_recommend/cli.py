@@ -7,7 +7,6 @@ from .evaluation import evaluate
 from .graph import start_graph
 from .indexing import index_posts
 from .profiles import build_user_vector
-from .ranking import generate
 from .retrieval import generate_embedding
 from .seed import seed
 from .source_demo import change_post, seed_actions
@@ -27,7 +26,6 @@ def main():
             "index",
             "profile",
             "embedding",
-            "generate",
             "graph",
             "evaluate",
         ],
@@ -61,8 +59,6 @@ def main():
         result = index_posts()
     elif args.command == "embedding":
         result = generate_embedding(args.user)
-    elif args.command == "generate":
-        result = generate(args.user)
     elif args.command == "graph":
         result = start_graph(args.user, args.pause_after_rerank)
     elif args.command == "evaluate":

@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field, StrictInt
 from . import source
 from .config import settings
 from .db import connection
-from .event_queue import allocate_generation
-from .feed import publish
 from .profiles import build_user_vector
 from .retrieval import retrieve_candidates
 
@@ -146,20 +144,3 @@ def diversify(candidates, ids):
         result.append(next_id)
         remaining.remove(next_id)
     return result
-
-
-def generate(user_id, generation=None, snapshot_id=None, created_at=None):
-    inputs = prepare_inputs(user_id)
-    candidates = inputs["candidates"]
-    strategy = "fixture_llm" if settings().model_mode == "fixture" else "llm"
-    try:
-        response = rerank_candidates(inputs)
-        ordered = validate_ranking(candidates, response["ordered_ids"])
-    except Exception:
-        ordered, strategy = [p["id"] for p in candidates], "rules_fallback"
-    ids = diversify(candidates, ordered)
-    if generation is None:
-        with connection() as conn:
-            generation = allocate_generation(conn, user_id)
-    published = publish(user_id, ids, strategy, generation, snapshot_id, created_at)
-    return {"strategy": strategy, "post_ids": ids, "published": published}
