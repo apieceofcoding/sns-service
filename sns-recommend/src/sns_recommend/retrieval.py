@@ -37,8 +37,12 @@ def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
         for p in posts
         if p["id"] not in excluded
     ]
+    return [{**r, "created_at": r["created_at"].isoformat()} for r in merge_candidates(rows, k)]
+
+
+def merge_candidates(rows, k=30):
     semantic = sorted(
-        [r for r in rows if valid and r["similarity"] is not None],
+        [r for r in rows if r["similarity"] is not None],
         key=lambda r: (r["similarity"], r["id"]),
         reverse=True,
     )[:k]
@@ -64,12 +68,11 @@ def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
         for row in group:
             if len(selected) < k:
                 selected[row["id"]] = merged[row["id"]]
-    ranked = sorted(
+    return sorted(
         selected.values(),
         key=lambda r: (r["similarity"] or 0, r["created_at"], r["id"]),
         reverse=True,
     )
-    return [{**r, "created_at": r["created_at"].isoformat()} for r in ranked]
 
 
 class PostRetriever(BaseRetriever):

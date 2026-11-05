@@ -6,6 +6,7 @@ from pathlib import Path
 from .config import settings
 from .embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
 from .ranking import PROMPT_VERSION, diversify, rerank_candidates, validate_ranking
+from .retrieval import merge_candidates
 
 
 def recall_at_k(ids, labels, k):
@@ -41,16 +42,17 @@ def evaluate(path="data/evaluation.json", k=10):
             if liked
             else None
         )
-        semantic = (
-            sorted(
-                corpus,
-                key=lambda p: sum(x * y for x, y in zip(profile, index[p["id"]], strict=True)),
-                reverse=True,
-            )
-            if profile is not None
-            else sorted(corpus, key=lambda p: p["created_at"], reverse=True)
+        candidates = merge_candidates(
+            [
+                {
+                    **p,
+                    "similarity": sum(x * y for x, y in zip(profile, index[p["id"]], strict=True))
+                    if profile is not None
+                    else None,
+                }
+                for p in corpus
+            ]
         )
-        candidates = semantic[:30]
         inputs = {
             "history": history,
             "candidates": candidates,
@@ -65,7 +67,7 @@ def evaluate(path="data/evaluation.json", k=10):
                 p["id"] for p in sorted(corpus, key=lambda p: p["created_at"], reverse=True)
             ],
             "popular": [p["id"] for p in sorted(corpus, key=lambda p: p["likes"], reverse=True)],
-            "embedding": [p["id"] for p in semantic],
+            "embedding": [p["id"] for p in candidates],
             "fixture_llm" if settings().model_mode == "fixture" else "llm": diversify(
                 candidates, ordered
             ),
