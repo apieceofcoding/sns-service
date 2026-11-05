@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from sns_recommend.data.indexing import index_posts
+from sns_recommend.data.indexing import index_changes
 from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.data.seed import seed
 from sns_recommend.data.source_demo import change_post, seed_actions
@@ -63,7 +63,7 @@ def main() -> None:
             "dimensions": len(vector) if vector is not None else 0,
         }
     elif args.command == "index":
-        result = index_posts()
+        result = index_changes()
     elif args.command == "embedding":
         result = generate_embedding(args.user)
     elif args.command == "graph":

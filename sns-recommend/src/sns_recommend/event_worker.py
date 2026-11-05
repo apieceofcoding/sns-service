@@ -7,55 +7,97 @@ import signal
 from threading import Event
 from types import FrameType
 
-from sns_recommend.data.indexing import index_posts, posts_needing_index
+from sns_recommend.core.types import DatabaseRow
+from sns_recommend.data.indexing import index_changes
 from sns_recommend.storage.event_queue import enqueue, schedule_active
 from sns_recommend.storage.postgres import connection, source_connection
+from sns_recommend.storage.sync_cursor import (
+    load_position,
+    next_position,
+    save_position,
+    settled_before,
+)
 
 logger = logging.getLogger(__name__)
-# Current actions in the SNS database. Each source row becomes one user_events row.
-SOURCE_ACTIONS = """
-    SELECT 'like:'||id AS source_key,'like' AS action,user_id,post_id,
-        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS removed_at
-    FROM likes
-    UNION ALL
-    SELECT 'reply:'||id,'reply',user_id,parent_id,
-        created_at AT TIME ZONE 'UTC',deleted_at AT TIME ZONE 'UTC'
-    FROM posts WHERE parent_id IS NOT NULL
-    UNION ALL
-    SELECT 'repost:'||id,'repost',user_id,repost_id,
-        created_at AT TIME ZONE 'UTC',deleted_at AT TIME ZONE 'UTC'
-    FROM posts WHERE repost_id IS NOT NULL
-    UNION ALL
-    SELECT action||':'||id,action,user_id,post_id,created_at,NULL
-    FROM post_actions
-"""
+BATCH_SIZE = 1000
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
+# Changed rows per SNS table, oldest first. Each source row becomes one user_events row.
+ACTION_SOURCES = (
+    (
+        "likes",
+        "0",
+        """SELECT 'like:'||id AS source_key,'like' AS action,user_id,post_id,
+        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS removed_at,
+        modified_at AT TIME ZONE 'UTC' AS changed_at,id::text AS cursor_id
+        FROM likes WHERE (modified_at,id)>(%s::timestamp,%s::bigint)
+        ORDER BY modified_at,id LIMIT %s""",
+    ),
+    (
+        "posts",
+        "0",
+        """SELECT CASE WHEN parent_id IS NOT NULL THEN 'reply' ELSE 'repost' END||':'||id
+        AS source_key,CASE WHEN parent_id IS NOT NULL THEN 'reply' ELSE 'repost' END AS action,
+        user_id,COALESCE(parent_id,repost_id) AS post_id,
+        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS removed_at,
+        modified_at AT TIME ZONE 'UTC' AS changed_at,id::text AS cursor_id
+        FROM posts WHERE (parent_id IS NOT NULL OR repost_id IS NOT NULL)
+        AND (modified_at,id)>(%s::timestamp,%s::bigint)
+        ORDER BY modified_at,id LIMIT %s""",
+    ),
+    (
+        "post_actions",
+        NIL_UUID,
+        """SELECT action||':'||id AS source_key,action,user_id,post_id,
+        created_at AS occurred_at,NULL::timestamptz AS removed_at,
+        created_at AS changed_at,id::text AS cursor_id
+        FROM post_actions WHERE (created_at,id)>(%s::timestamptz,%s::uuid)
+        ORDER BY created_at,id LIMIT %s""",
+    ),
+)
 # These actions change what the user is interested in, so the list should be rebuilt.
 REFRESH_ACTIONS = {"like", "reply", "repost", "click"}
 
 
-def sync_events() -> int:
-    with source_connection() as source:
-        rows = source.execute(SOURCE_ACTIONS).fetchall()
+def sync_source(name: str, first_id: str, query: str) -> list[DatabaseRow]:
+    """Copy changed rows until a batch has news. Events and the cursor commit together."""
     with connection() as conn:
-        known = {
-            row["source_key"]: row["removed_at"]
-            for row in conn.execute(
-                "SELECT source_key,removed_at FROM user_events WHERE source_key IS NOT NULL"
-            ).fetchall()
-        }
-        changed = [
-            row
-            for row in rows
-            if row["source_key"] not in known or known[row["source_key"]] != row["removed_at"]
-        ]
-        for row in changed:
-            conn.execute(
-                """INSERT INTO user_events(source_key,action,user_id,post_id,occurred_at,removed_at)
-                VALUES (%(source_key)s,%(action)s,%(user_id)s,%(post_id)s,
-                %(occurred_at)s,%(removed_at)s)
-                ON CONFLICT(source_key) DO UPDATE SET removed_at=EXCLUDED.removed_at""",
-                row,
-            )
+        position = load_position(conn, name, first_id)
+    # The saved cursor stays behind the overlap window, but reading must still move through it.
+    reading = position
+    while True:
+        with source_connection() as source:
+            settled = settled_before(source)
+            rows = source.execute(query, (*reading, BATCH_SIZE)).fetchall()
+        with connection() as conn:
+            known = {
+                row["source_key"]: row["removed_at"]
+                for row in conn.execute(
+                    "SELECT source_key,removed_at FROM user_events WHERE source_key=ANY(%s)",
+                    ([row["source_key"] for row in rows],),
+                ).fetchall()
+            }
+            changed = [
+                row
+                for row in rows
+                if row["source_key"] not in known or known[row["source_key"]] != row["removed_at"]
+            ]
+            for row in changed:
+                conn.execute(
+                    """INSERT INTO user_events(source_key,action,user_id,post_id,occurred_at,removed_at)
+                    VALUES (%(source_key)s,%(action)s,%(user_id)s,%(post_id)s,
+                    %(occurred_at)s,%(removed_at)s)
+                    ON CONFLICT(source_key) DO UPDATE SET removed_at=EXCLUDED.removed_at""",
+                    row,
+                )
+            position = next_position(rows, position, settled, first_id)
+            save_position(conn, name, position)
+        if changed or len(rows) < BATCH_SIZE:
+            return changed
+        reading = rows[-1]["changed_at"], rows[-1]["cursor_id"]
+
+
+def sync_events() -> int:
+    changed = [row for source in ACTION_SOURCES for row in sync_source(*source)]
     for user_id in {row["user_id"] for row in changed if row["action"] in REFRESH_ACTIONS}:
         enqueue(user_id)
     return len(changed)
@@ -65,8 +107,7 @@ def poll_once() -> dict[str, int]:
     # A model failure in indexing must not hold back recorded actions, so it runs last.
     events = sync_events()
     scheduled = schedule_active()["scheduled"]
-    post_ids = posts_needing_index()
-    indexed = index_posts(post_ids)["indexed"] if post_ids else 0
+    indexed = index_changes()["indexed"]
     return {
         "processed": events + indexed,
         "events": events,

@@ -17,7 +17,7 @@ from sns_recommend.core.types import (
     RankingInput,
     RankingResult,
 )
-from sns_recommend.data.indexing import index_posts
+from sns_recommend.data.indexing import index_changes, index_posts
 from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.event_worker import poll_once, sync_events
@@ -38,10 +38,17 @@ pytestmark = pytest.mark.integration
 READER = 7  # Seed reader interested in backend and AI. Readers write no posts.
 
 
+def index_all() -> int:
+    total = 0
+    while indexed := index_changes()["indexed"]:
+        total += indexed
+    return total
+
+
 def prepare() -> None:
     seed_actions()
     sync_events()
-    index_posts()
+    index_all()
 
 
 def count(conn: DatabaseConnection, table: str) -> int:
@@ -51,8 +58,8 @@ def count(conn: DatabaseConnection, table: str) -> int:
 
 
 def test_recommend_database_keeps_no_copy_of_posts(infra: None) -> None:
-    assert index_posts()["indexed"] == 240
-    assert index_posts()["indexed"] == 0
+    assert index_all() == 240
+    assert index_all() == 0
     with connection() as conn:
         tables = conn.execute(
             "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
@@ -235,7 +242,7 @@ def test_absent_reactions_disable_semantic_search(infra: None) -> None:
 
 
 def test_new_account_without_actions_gets_latest_and_popular_only(infra: None) -> None:
-    index_posts()
+    index_all()
     with source_connection() as conn:
         conn.execute(
             """INSERT INTO users(id,username,created_at,modified_at)
@@ -326,7 +333,7 @@ def test_actual_post_changes_increment_version(infra: None) -> None:
 
 
 def test_event_worker_indexes_only_latest_version_without_api(infra: None) -> None:
-    index_posts()
+    index_all()
     change_post(1001, "Python old")
     change_post(1001, "Python latest")
     assert poll_once()["indexed"] == 1
@@ -353,10 +360,10 @@ def test_action_is_copied_once_and_stays_as_history(infra: None) -> None:
         assert row["user_id"] == READER and row["removed_at"] is None
 
 
-def test_failed_indexing_is_found_again_by_the_next_comparison(
+def test_failed_indexing_is_read_again_from_the_same_cursor(
     infra: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    index_posts()
+    index_all()
     change_post(1001, "Python retry")
 
     def fail(self: ModelEmbeddings, texts: list[str]) -> list[list[float]]:
@@ -399,7 +406,7 @@ def test_locked_request_is_skipped(infra: None) -> None:
 def test_deleted_post_removes_vector_without_embedding_call(
     infra: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    index_posts()
+    index_all()
     with source_connection() as conn:
         conn.execute("UPDATE posts SET deleted_at=now() WHERE id=1")
     monkeypatch.setattr(
@@ -434,7 +441,7 @@ def test_new_generation_fences_old_graph(infra: None) -> None:
 def test_recent_impression_schedules_refresh_and_feed_read_writes_nothing(infra: None) -> None:
     from sns_recommend.worker.scheduler import schedule_active
 
-    index_posts()
+    index_all()
     result = TestClient(app).get(f"/internal/feeds/{READER}")
     assert result.status_code == 200 and "refresh_event" not in result.json()
     with connection() as conn:
@@ -455,7 +462,7 @@ def test_behavior_only_seed_and_cold_start(infra: None) -> None:
     assert seed_actions() == {"actions": 6}
     assert seed_actions() == {"actions": 0}
     sync_events()
-    index_posts()
+    index_all()
     for user in [7, 8, 9]:
         candidates = retrieve_candidates(user, user_vector=build_user_vector(user))
         assert any(p["similarity"] is not None for p in candidates)

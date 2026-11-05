@@ -28,12 +28,23 @@ def ordered_post_ids(strategy: str) -> list[int]:
     return [row["id"] for row in rows]
 
 
-def posts_to_index(post_ids: list[int] | None = None) -> list[DatabaseRow]:
+def changed_posts(position: tuple[datetime, str], limit: int) -> list[DatabaseRow]:
+    with source_connection() as conn:
+        return conn.execute(
+            f"""SELECT id,content_version AS version,({VISIBLE}) AS visible,
+            modified_at AT TIME ZONE 'UTC' AS changed_at,id::text AS cursor_id
+            FROM posts WHERE (modified_at,id)>(%s::timestamp,%s::bigint)
+            ORDER BY modified_at,id LIMIT %s""",
+            (*position, limit),
+        ).fetchall()
+
+
+def posts_to_index(post_ids: list[int]) -> list[DatabaseRow]:
     with source_connection() as conn:
         return conn.execute(
             f"""SELECT id,content AS body,content_version AS version,({VISIBLE}) AS visible
-            FROM posts WHERE %s::bigint[] IS NULL OR id=ANY(%s) ORDER BY id""",
-            (post_ids, post_ids),
+            FROM posts WHERE id=ANY(%s) ORDER BY id""",
+            (post_ids,),
         ).fetchall()
 
 
