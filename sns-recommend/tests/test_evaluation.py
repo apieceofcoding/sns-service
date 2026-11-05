@@ -34,3 +34,35 @@ def test_evaluation_separates_context_from_available_candidates(
     actual = evaluate(str(path))
     assert actual["rows"] == expected["rows"]
     assert len(actual["rows"]) == 12
+
+
+def test_evaluation_candidates_use_the_generation_merge_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json
+    from datetime import datetime
+
+    from sns_recommend.core.types import RankingInput, RankingResult
+    from sns_recommend.evaluation import offline
+
+    seen = []
+    original = offline.rerank_candidates
+
+    def capture(inputs: RankingInput) -> RankingResult:
+        seen.append(inputs["candidates"])
+        return original(inputs)
+
+    monkeypatch.setattr(offline, "rerank_candidates", capture)
+    evaluate()
+
+    data = json.loads(Path("data/evaluation.json").read_text())
+    cutoff = datetime.fromisoformat(data["context_cutoff"])
+    observed = datetime.fromisoformat(data["evaluation_time"])
+    corpus = [
+        p for p in data["posts"] if cutoff < datetime.fromisoformat(p["created_at"]) <= observed
+    ]
+    newest = max(corpus, key=lambda p: (p["created_at"], p["id"]))["id"]
+    most_liked = max(corpus, key=lambda p: (p["likes"], p["id"]))["id"]
+    for candidates in seen:
+        assert len(candidates) == 30
+        assert {newest, most_liked} <= {p["id"] for p in candidates}

@@ -3,14 +3,22 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from sns_recommend.core.config import settings
 from sns_recommend.core.resources import resource_directory
-from sns_recommend.core.types import EvaluationReport, QualityRow, RankingInput, StabilityRow
+from sns_recommend.core.types import (
+    Candidate,
+    EvaluationReport,
+    QualityRow,
+    RankingInput,
+    StabilityRow,
+)
 from sns_recommend.evaluation.metrics import ndcg_at_k, recall_at_k
 from sns_recommend.providers.embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
+from sns_recommend.recommenders.retrieval import merge_candidates
 
 
 def evaluate(path: str | Path | None = None, k: int = 10) -> EvaluationReport:
@@ -37,16 +45,22 @@ def evaluate(path: str | Path | None = None, k: int = 10) -> EvaluationReport:
             if liked
             else None
         )
-        semantic = (
-            sorted(
-                corpus,
-                key=lambda p: sum(x * y for x, y in zip(profile, index[p["id"]], strict=True)),
-                reverse=True,
-            )
-            if profile is not None
-            else sorted(corpus, key=lambda p: p["created_at"], reverse=True)
+        candidates = cast(
+            list[Candidate],
+            merge_candidates(
+                [
+                    {
+                        **p,
+                        "similarity": sum(
+                            x * y for x, y in zip(profile, index[p["id"]], strict=True)
+                        )
+                        if profile is not None
+                        else None,
+                    }
+                    for p in corpus
+                ]
+            ),
         )
-        candidates = semantic[:30]
         inputs: RankingInput = {
             "history": history,
             "candidates": candidates,
@@ -61,7 +75,7 @@ def evaluate(path: str | Path | None = None, k: int = 10) -> EvaluationReport:
                 p["id"] for p in sorted(corpus, key=lambda p: p["created_at"], reverse=True)
             ],
             "popular": [p["id"] for p in sorted(corpus, key=lambda p: p["likes"], reverse=True)],
-            "embedding": [p["id"] for p in semantic],
+            "embedding": [p["id"] for p in candidates],
             ranking_strategy(response["mode"]): diversify(candidates, ordered),
         }
         labels = {str(p["id"]): int(p["topic"] == user["topic"]) for p in corpus}
