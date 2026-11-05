@@ -42,8 +42,9 @@ def seed() -> dict[str, int | str]:
                     f"seed post ID {i} conflicts with existing data; use a fresh course database"
                 )
             conn.execute(
-                """INSERT INTO posts(id,user_id,content,like_count,created_at,modified_at)
-                VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                """INSERT INTO posts(id,user_id,content,like_count,repost_count,reply_count,
+                view_count,created_at,modified_at)
+                VALUES (%s,%s,%s,%s,0,0,0,%s,%s) ON CONFLICT DO NOTHING""",
                 (
                     i,
                     author_id,
