@@ -50,11 +50,25 @@ def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
             if row["id"] not in merged:
                 merged[row["id"]] = {**row, "sources": []}
             merged[row["id"]]["sources"].append(label)
+    # Keep fresh and popular candidates even when semantic search already fills k.
+    supplement = min(5, k // 3)
+    selected = {}
+    for group in (
+        semantic[: k - 2 * supplement],
+        latest[:supplement],
+        popular[:supplement],
+        semantic,
+        latest,
+        popular,
+    ):
+        for row in group:
+            if len(selected) < k:
+                selected[row["id"]] = merged[row["id"]]
     ranked = sorted(
-        merged.values(),
+        selected.values(),
         key=lambda r: (r["similarity"] or 0, r["created_at"], r["id"]),
         reverse=True,
-    )[:k]
+    )
     return [{**r, "created_at": r["created_at"].isoformat()} for r in ranked]
 
 
