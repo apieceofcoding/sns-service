@@ -41,8 +41,9 @@ def seed():
                     f"seed post ID {i} conflicts with existing data; use a fresh course database"
                 )
             conn.execute(
-                """INSERT INTO posts(id,user_id,content,like_count,created_at,modified_at)
-                VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                """INSERT INTO posts(id,user_id,content,like_count,repost_count,reply_count,
+                view_count,created_at,modified_at)
+                VALUES (%s,%s,%s,%s,0,0,0,%s,%s) ON CONFLICT DO NOTHING""",
                 (i, author_id, body, (i * 17) % 101, post_created_at(i, now, group_size=6), now),
             )
         for table in ("users", "posts"):
