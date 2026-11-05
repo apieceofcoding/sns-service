@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 from sns_recommend.core.config import settings
-from sns_recommend.core.types import GenerationResult, RankingInput
+from sns_recommend.core.types import RankingInput
 from sns_recommend.data.profiles import build_user_vector
-from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
-from sns_recommend.recommenders.ranking import diversify, validate_ranking
+from sns_recommend.providers.rerank import PROMPT_VERSION
 from sns_recommend.recommenders.retrieval import retrieve_candidates
 from sns_recommend.storage import source
-from sns_recommend.storage.event_queue import allocate_generation, current_generation
-from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection
 
 
@@ -34,22 +31,3 @@ def prepare_inputs(user_id: int) -> RankingInput:
         "model": settings().rerank_model,
         "mode": settings().model_mode,
     }
-
-
-def generate(user_id: int) -> GenerationResult:
-    with connection() as conn:
-        generation = allocate_generation(conn, user_id)
-    inputs = prepare_inputs(user_id)
-    candidates = inputs["candidates"]
-    try:
-        response = rerank_candidates(inputs)
-        ordered = validate_ranking(candidates, response.get("ordered_ids"))
-        strategy = ranking_strategy(response["mode"])
-    except Exception:
-        ordered, strategy = [p["id"] for p in candidates], "rules_fallback"
-    ids = diversify(candidates, ordered)
-    with connection() as conn:
-        published = current_generation(conn, user_id) == generation and publish(
-            user_id, ids, strategy, generation
-        )
-    return {"strategy": strategy, "post_ids": ids, "published": published}

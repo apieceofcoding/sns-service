@@ -9,7 +9,6 @@ from sns_recommend.data.seed import seed
 from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.evaluation.benchmark import benchmark
 from sns_recommend.evaluation.offline import evaluate
-from sns_recommend.pipelines.generation import generate
 from sns_recommend.pipelines.graph import start_graph
 from sns_recommend.recommenders.baseline import baseline
 from sns_recommend.recommenders.retrieval import generate_embedding
@@ -31,7 +30,6 @@ def main() -> None:
             "index",
             "profile",
             "embedding",
-            "generate",
             "graph",
             "evaluate",
             "benchmark",
@@ -68,8 +66,6 @@ def main() -> None:
         result = index_posts()
     elif args.command == "embedding":
         result = generate_embedding(args.user)
-    elif args.command == "generate":
-        result = generate(args.user)
     elif args.command == "graph":
         result = start_graph(args.user, args.pause_after_rerank)
     elif args.command == "evaluate":
