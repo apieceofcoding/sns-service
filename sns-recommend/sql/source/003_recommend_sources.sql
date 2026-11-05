@@ -22,3 +22,8 @@ CREATE TRIGGER recommend_version BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUN
 DROP TRIGGER IF EXISTS recommend_insert ON posts;
 DROP TRIGGER IF EXISTS recommend_update ON posts;
 DROP FUNCTION IF EXISTS recommend_post_event();
+CREATE INDEX IF NOT EXISTS likes_sync ON likes(modified_at,id);
+CREATE INDEX IF NOT EXISTS posts_sync ON posts(modified_at,id);
+CREATE INDEX IF NOT EXISTS posts_action_sync ON posts(modified_at,id)
+ WHERE parent_id IS NOT NULL OR repost_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS post_actions_sync ON post_actions(created_at,id);
