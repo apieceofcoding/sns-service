@@ -4,8 +4,6 @@ import com.apiece.springboot_sns_sample.domain.post.Post;
 import com.apiece.springboot_sns_sample.domain.post.PostRepository;
 import com.apiece.springboot_sns_sample.domain.post.PostService;
 import com.apiece.springboot_sns_sample.domain.user.User;
-import com.apiece.springboot_sns_sample.domain.recommend.RecommendActionRepository;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,7 +17,6 @@ public class LikeService {
     private final LikeRepository likeRepository;
     private final PostRepository postRepository;
     private final PostService postService;
-    private final RecommendActionRepository recommendActions;
 
     @Transactional
     public Like createLike(Long postId, User user) {
@@ -33,7 +30,6 @@ public class LikeService {
         Like newLike = likeRepository.save(like);
 
         postRepository.incrementLikeCount(postId);
-        recommendActions.record(UUID.randomUUID(), "like", user.getId(), postId);
 
         return newLike;
     }

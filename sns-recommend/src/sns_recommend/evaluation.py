@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import settings
-from .embeddings import CachedEmbeddings, FixtureEmbeddings, normalize
+from .embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
 from .ranking import PROMPT_VERSION, diversify, rerank_candidates, validate_ranking
 
 
@@ -29,7 +29,7 @@ def evaluate(path="data/evaluation.json", k=10):
     corpus = [
         p for p in data["posts"] if cutoff < datetime.fromisoformat(p["created_at"]) <= observed
     ]
-    embedding = FixtureEmbeddings() if settings().model_mode == "fixture" else CachedEmbeddings()
+    embedding = FixtureEmbeddings() if settings().model_mode == "fixture" else ModelEmbeddings()
     vectors = embedding.embed_documents([p["body"] for p in data["posts"]])
     index = {p["id"]: v for p, v in zip(data["posts"], vectors, strict=True)}
     rows, stability = [], []

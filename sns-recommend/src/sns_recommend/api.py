@@ -3,8 +3,6 @@ from fastapi import FastAPI, HTTPException, Query
 from redis.exceptions import RedisError
 
 from . import source
-from .db import connection
-from .event_queue import enqueue
 from .events import excluded_ids
 from .feed import read_feed
 
@@ -24,14 +22,6 @@ def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None =
         result = read_feed(user_id, limit, cursor, excluded, alive=source.alive_ids)
         if not source.user_exists(user_id):
             raise HTTPException(404, "unknown user")
-        with connection() as conn:
-            conn.execute(
-                """INSERT INTO profiles(user_id,active_at) VALUES (%s,now())
-                ON CONFLICT(user_id) DO UPDATE SET active_at=now()""",
-                (user_id,),
-            )
-        if not result["ready"] or result.get("stale") or not result["next_cursor"]:
-            result["refresh_event"] = enqueue("recommend.requested", user_id, throttle=True)
         return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
