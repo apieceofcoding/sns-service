@@ -4,7 +4,7 @@ import json
 from .baseline import baseline
 from .db import initialize, source_connection
 from .graph import start_graph
-from .indexing import index_posts
+from .indexing import index_changes
 from .profiles import build_user_vector
 from .retrieval import generate_embedding
 from .seed import seed
@@ -54,7 +54,7 @@ def main():
             "dimensions": len(vector) if vector is not None else 0,
         }
     elif args.command == "index":
-        result = index_posts()
+        result = index_changes()
     elif args.command == "embedding":
         result = generate_embedding(args.user)
     elif args.command == "graph":
