@@ -157,36 +157,35 @@ uv run sns-recommend index
 # 글 변경과 독자별 좋아요 6개 기록
 uv run sns-recommend source-post --post 1001
 uv run sns-recommend seed-actions
-# 변경을 벡터에 반영하고 행동 처리 완료 표시
+# SNS DB와 비교해 user_events와 글 벡터에 반영
 uv run sns-recommend-event-worker --once
 # 별도 터미널에서 계속 처리
 uv run sns-recommend-event-worker
 ```
 
-`recommend_events`에 기록한 변경을 별도 이벤트 worker가 처리해요. 처리 후 `--once`를 다시 실행하면 `processed: 0`입니다. 행동 기록과 예약된 추천 갱신 요청은 남습니다.
+이벤트 worker가 SNS DB의 원본을 읽어 추천 DB에 옮겨요. 바뀐 것이 없으면 `--once` 결과의 `processed`가 0입니다.
 
 #### 행동과 추천 갱신 기록
 
-이 단원에서 이벤트 종류와 저장 경로를 완성합니다. 이후 단원은 같은 기록으로 후보와 순위를 만들어요. 행동 수집은 sns-app이 담당합니다. 클릭과 노출의 화면 자동 전송은 별도 범위이며, 아래 요청으로 확인해요.
+원본은 SNS DB에 두고, 추천 DB의 `user_events`에는 이벤트 worker만 저장합니다. 추천 API는 읽기만 해요.
 
-| action | 생성 경로 | 처리 |
+| action | 원본 | 사용하는 곳 |
 |---|---|---|
-| `post.updated` | 글 작성과 본문 수정 → SNS DB 트리거 | 글 벡터 갱신 |
-| `post.deleted` | 글의 `deleted_at` 변경 → SNS DB 트리거 | 검색 벡터에 삭제 반영 |
-| `impression` | SNS 행동 API | 이미 본 글 제외 |
-| `click` | SNS 행동 API | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
-| `like` | 기존 좋아요 API. 좋아요와 이벤트를 같은 트랜잭션에 저장 | 사용자 선호 입력, 이벤트 worker가 갱신 예약 |
-| `not_interested` | SNS 행동 API | 관심 없는 글 제외 |
-| `recommend.requested` | 피드 조회, 클릭과 좋아요 처리, 주기 예약 또는 명시적 생성 명령 | 사용자별 추천 생성 예약 |
+| `like` | `likes` | 사용자 벡터, 재정렬 이력 |
+| `reply` | `posts.parent_id` | 사용자 벡터, 재정렬 이력 |
+| `repost` | `posts.repost_id` | 사용자 벡터, 재정렬 이력 |
+| `click` | `post_actions` | 사용자 벡터, 재정렬 이력 |
+| `impression` | `post_actions` | 이미 본 글 제외, 활동 사용자 판단 |
+| `recommend.requested` | worker가 생성 | 사용자별 추천 생성 예약 |
 
-글 변경은 DB 트리거가 원본 저장과 같은 트랜잭션에서 기록합니다. 좋아요는 기존 `POST /api/v1/likes`에서 이벤트까지 함께 저장해요. 클릭, 노출과 관심 없음은 `POST /api/v1/recommend/actions`로 받습니다. 사용자 ID는 로그인 세션에서 읽고, 재전송은 같은 eventId를 사용합니다. `seed-actions`는 독자별 합성 이력을 만드는 준비 명령입니다.
+좋아요, 답글과 재게시는 SNS 앱의 기존 저장 그대로입니다. 취소하거나 삭제하면 worker가 `removed_at`을 채워 추천에서 빠져요. 노출과 클릭은 원본 테이블이 없어서 `POST /api/v1/recommend/actions`가 `post_actions`에 저장합니다. 화면의 게시글 카드가 이 요청을 보내고, 사용자 ID는 로그인 세션에서 읽어요. 같은 글의 노출은 한 행만 남고, 클릭의 재전송은 같은 eventId로 구분합니다. `seed-actions`는 독자별 합성 좋아요를 `likes`에 넣는 준비 명령입니다.
 
 ```sh
 # 로그인 쿠키 저장 (1단원에서 가입한 계정)
 curl -fsS -c cookies.txt -X POST http://localhost:8080/api/v1/login -d 'username=recommenddemo&password=recommend1234'
 # 클릭 기록. 같은 행동을 재전송할 때는 같은 eventId 사용
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions -H 'Content-Type: application/json' -d '{"eventId":"03b9e8fe-a243-48b8-9048-11c48ce52001","action":"click","postId":4}'
-# 좋아요와 추천 이벤트를 함께 저장
+# 기존 좋아요 API. SNS DB에는 좋아요만 저장
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/likes -H 'Content-Type: application/json' -d '{"postId":1}'
 uv run sns-recommend-event-worker --once
 
@@ -195,26 +194,24 @@ uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
 ```
 
 ```sh
-# 실습 터미널: 조회 결과와 refresh_event 확인
+# 실습 터미널: 조회는 저장된 목록을 읽기만 함
 curl -fsS http://localhost:8001/internal/feeds/7
 ```
 
-추천 목록이 없거나 오래됐거나 마지막 페이지이면 기존 응답을 반환하면서 갱신을 예약해요. 조회는 모델을 호출하지 않습니다. 조회와 주기 예약은 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합칩니다. 클릭과 좋아요에 따른 예약도 같은 대기 요청을 재사용해요.
-
-주기 예약 규칙도 여기서 정의합니다. 최근 30분 내 조회했고 최근 5분 내 갱신 요청이 없는 사용자를 대상으로 해요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 5단원에서 연결합니다. 7단원에서는 같은 규칙을 주기적으로 실행하고 간격과 비용을 검증해요.
+좋아요, 답글, 재게시와 클릭이 추가되거나 취소되면 worker가 추천 갱신을 예약해요. 최근 30분 내 노출이 있는 사용자의 목록이 없거나 5분이 지났을 때도 예약합니다. 이 경우 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합쳐요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 5단원에서 연결합니다. 7단원에서는 비용과 갱신 주기를 검증해요.
 
 ```sql
--- SNS DB에서 기록과 처리 상태 확인
-SELECT action, user_id, post_id, processed_at
-FROM recommend_events
-ORDER BY created_at DESC, id DESC LIMIT 20;
+-- 추천 DB에서 기록 확인
+SELECT action, user_id, post_id, removed_at, processed_at
+FROM user_events
+ORDER BY occurred_at DESC LIMIT 20;
 ```
 
-`recommend.requested`는 이벤트 worker가 처리하지 않으므로 대기 상태가 정상입니다. 과거 호환용 `profile.updated`는 새로 생성하지 않습니다.
+`recommend.requested`는 이벤트 worker가 처리하지 않으므로 대기 상태가 정상입니다.
 
 #### 사용자 벡터 준비
 
-최근 7일 클릭과 좋아요를 누른 서로 다른 글 20개 중, 원본 버전과 임베딩 공간이 일치하는 최대 5개 벡터를 평균내 정규화합니다. 글 벡터를 재사용하므로 새 모델 호출은 없어요.
+최근 7일 좋아요, 답글, 재게시와 클릭이 있는 서로 다른 글 20개 중, 원본 버전과 임베딩 공간이 일치하는 최대 5개 벡터를 평균내 정규화합니다. 글 벡터를 재사용하므로 새 모델 호출은 없어요.
 
 ```sh
 uv run sns-recommend profile --user 7
@@ -222,7 +219,7 @@ uv run sns-recommend profile --user 8
 uv run sns-recommend profile --user 9
 ```
 
-`ready`는 벡터 준비 여부이고 `dimensions`는 계산한 벡터 차원입니다. 유효한 반응 글이 없으면 `ready: false`로 표시해요. 사용자 벡터는 메모리에서 계산하며 추천 DB에 저장하지 않습니다. 다음 검색 함수에 인자로 전달해요. `profiles.active_at`에는 조회 시각만 기록합니다. 게시글 본문은 SNS DB에만 둡니다.
+`ready`는 벡터 준비 여부이고 `dimensions`는 계산한 벡터 차원입니다. 유효한 반응 글이 없으면 `ready: false`로 표시해요. 사용자 벡터는 메모리에서 계산하며 추천 DB에 저장하지 않습니다. 다음 검색 함수에 인자로 전달해요. 게시글 본문은 SNS DB에만 둡니다.
 
 ### part-4. 후보 검색과 LLM 순위 결정
 
@@ -236,7 +233,7 @@ uv run sns-recommend embedding --user 7
 uv run sns-recommend generate --user 7
 ```
 
-의미 검색, 최신순과 인기순 후보를 합치고 본인 글, 삭제 글, 이미 본 글과 관심 없음을 제외합니다. 행동이 없으면 최신순과 인기순으로 시작해요. 검색에서 빠진 글은 LLM이 선택할 수 없으므로 후보를 먼저 확인합니다.
+의미 검색, 최신순과 인기순 후보를 합치고 본인 글, 삭제 글, 이미 본 글을 제외합니다. 행동이 없으면 최신순과 인기순으로 시작해요. 검색에서 빠진 글은 LLM이 선택할 수 없으므로 후보를 먼저 확인합니다.
 
 `embedding`과 `generate`는 실행 시 최신 행동으로 사용자 벡터를 다시 계산합니다. 새 모델 호출 없이 3단원의 함수를 재사용해요. `generate`는 후보만 LLM에 보내고, 반환 ID 검증과 다양성 조정을 거쳐 Redis에 저장합니다. 오류가 나면 후보 순위로 대체해요.
 
@@ -325,8 +322,8 @@ docker compose up -d --wait  # part-2부터
 
 | 저장소 | 내용 | 연결 설정 |
 |---|---|---|
-| SNS DB (`snsdb`, 5432) | 회원과 게시글 원본, recommend_events | `SOURCE_DATABASE_URL` |
-| 추천 DB (`recommend`, 55432) | 글 벡터와 캐시, 사용자 벡터와 체크포인트 | `DATABASE_URL` |
+| SNS DB (`snsdb`, 5432) | 회원, 게시글, 좋아요 원본과 post_actions | `SOURCE_DATABASE_URL` |
+| 추천 DB (`recommend`, 55432) | user_events, 글 벡터와 체크포인트 | `DATABASE_URL` |
 | Redis (56379) | 완성된 추천 ID 목록 | `REDIS_URL` |
 
 본문은 SNS DB에서 읽어요. 글 변경 이벤트에는 ID와 버전만 담고, worker가 원본을 읽어 벡터를 갱신합니다.
