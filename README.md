@@ -231,6 +231,7 @@ uv run sns-recommend init
 uv run sns-recommend embedding --user 7
 # LangGraph로 후보 검색, LLM 재정렬, 검증, 다양성 조정과 발행을 실행
 uv run sns-recommend graph --user 8
+uv run sns-recommend graph --user 9
 # 재정렬 직후 멈춘 뒤 worker로 이어서 실행
 uv run sns-recommend graph --user 7 --pause-after-rerank
 uv run python -m sns_recommend.worker --once
@@ -240,7 +241,7 @@ uv run python -m sns_recommend.worker --once
 
 `embedding`과 `graph`는 실행 시 최신 행동으로 사용자 벡터를 다시 계산합니다. 새 모델 호출 없이 3단원의 함수를 재사용해요. `graph`는 후보만 LLM에 보내고, 반환 ID 검증과 다양성 조정을 거쳐 Redis에 저장합니다. 오류가 나면 후보 순위로 대체해요.
 
-체크포인트에 진행 상태를 저장하고, 생성 번호로 오래된 결과의 발행을 막습니다. 체크포인트 테이블은 자동으로 준비해요.
+체크포인트에 진행 상태를 저장하고, 생성 번호로 오래된 결과의 발행을 막습니다. 체크포인트 테이블은 자동으로 준비해요. worker는 가장 오래된 대기 요청부터 처리하므로, 다른 요청이 남아 있으면 멈춘 작업은 그 뒤에 이어집니다.
 
 ### part-5. 품질 평가
 
