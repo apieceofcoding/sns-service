@@ -60,7 +60,6 @@ class FeedResponse(TypedDict):
     strategy: NotRequired[str]
     created_at: NotRequired[float]
     stale: NotRequired[bool]
-    refresh_event: NotRequired[str | None]
 
 
 class GenerationResult(TypedDict):
@@ -82,10 +81,11 @@ class PausedResult(TypedDict):
 class EventRecord(TypedDict):
     id: UUID
     action: str
-    user_id: int | None
+    user_id: int
     post_id: int | None
-    version: int | None
-    created_at: datetime
+    occurred_at: datetime
+    source_key: str | None
+    removed_at: datetime | None
     claim_id: UUID | None
     locked_until: datetime | None
     processed_at: datetime | None

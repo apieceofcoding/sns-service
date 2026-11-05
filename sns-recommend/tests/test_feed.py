@@ -35,7 +35,7 @@ def test_cursor_query_is_bounded_before_storage_access(monkeypatch: pytest.Monke
     def forbidden(*args: object) -> Never:
         raise AssertionError("invalid cursor reached storage")
 
-    monkeypatch.setattr("sns_recommend.api.routers.feeds.connection", forbidden)
+    monkeypatch.setattr("sns_recommend.api.routers.feeds.excluded_ids", forbidden)
     response = TestClient(app).get(
         "/internal/feeds/1",
         params={"cursor": "a" * 513},

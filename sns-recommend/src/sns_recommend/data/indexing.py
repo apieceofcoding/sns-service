@@ -4,9 +4,26 @@ from langchain_core.documents import Document
 
 from sns_recommend.core.config import settings
 from sns_recommend.core.types import IndexResult
-from sns_recommend.providers.embeddings import CachedEmbeddings, space, vector_sql
+from sns_recommend.providers.embeddings import ModelEmbeddings, space, vector_sql
 from sns_recommend.storage import source
 from sns_recommend.storage.postgres import connection, source_connection
+
+
+def posts_needing_index() -> list[int]:
+    """Compare post versions with stored vectors. Unchanged posts cost no model call."""
+    posts = source.posts_to_index()
+    with connection() as conn:
+        rows = conn.execute("SELECT post_id,content_version,space FROM post_embeddings").fetchall()
+    stored = {r["post_id"]: r for r in rows}
+    needed = []
+    for post in posts:
+        row = stored.get(post["id"])
+        if post["visible"]:
+            if not row or row["content_version"] != post["version"] or row["space"] != space():
+                needed.append(post["id"])
+        elif row:
+            needed.append(post["id"])
+    return needed
 
 
 def index_posts(post_ids: list[int] | None = None) -> IndexResult:
@@ -26,7 +43,7 @@ def index_posts(post_ids: list[int] | None = None) -> IndexResult:
         for p in active
     ]
     vectors = (
-        CachedEmbeddings().embed_documents([d.page_content for d in documents]) if documents else []
+        ModelEmbeddings().embed_documents([d.page_content for d in documents]) if documents else []
     )
     # A post edited or deleted during the model call keeps no vector. Its own event indexes it.
     with source_connection() as original:

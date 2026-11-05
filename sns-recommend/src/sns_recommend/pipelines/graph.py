@@ -32,7 +32,7 @@ from sns_recommend.storage.event_queue import (
     renew,
 )
 from sns_recommend.storage.feeds import publish
-from sns_recommend.storage.postgres import connection, source_connection
+from sns_recommend.storage.postgres import connection
 
 GRAPH_VERSION = "sns-feed-behavior-v3"
 
@@ -104,9 +104,9 @@ def make_graph(
 
     def publish_feed(state: FeedState) -> FeedState:
         guard(state)
-        with source_connection() as original:
+        with connection() as original:
             event = original.execute(
-                "SELECT * FROM recommend_events WHERE id=%s FOR UPDATE", (state["event_id"],)
+                "SELECT * FROM user_events WHERE id=%s FOR UPDATE", (state["event_id"],)
             ).fetchone()
             if (
                 event is None
@@ -184,15 +184,15 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
                     "claim_id": str(event["claim_id"]),
                     "generation": generation,
                     "snapshot_id": str(event["id"]),
-                    "created_at": event["created_at"].timestamp(),
+                    "created_at": event["occurred_at"].timestamp(),
                     "graph_version": GRAPH_VERSION,
                 },
                 config,
             )
         if graph.get_state(config).next:
-            with source_connection() as conn:
+            with connection() as conn:
                 conn.execute(
-                    "UPDATE recommend_events SET locked_until=now() WHERE id=%s AND claim_id=%s",
+                    "UPDATE user_events SET locked_until=now() WHERE id=%s AND claim_id=%s",
                     (event["id"], event["claim_id"]),
                 )
             return {"paused": True, "event_id": str(event["id"]), "next": "validate"}
@@ -216,7 +216,7 @@ def start_graph(user_id: int, pause: bool) -> GraphResult | PausedResult: ...
 
 
 def start_graph(user_id: int, pause: bool = False) -> GraphResult | PausedResult:
-    event_id = enqueue("recommend.requested", user_id)
+    event_id = enqueue(user_id)
     event = claim(("recommend.requested",), event_id=event_id)
     if event is None:
         raise RuntimeError("event already owned by a worker")

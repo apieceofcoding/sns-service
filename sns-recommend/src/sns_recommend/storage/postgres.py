@@ -15,7 +15,7 @@ from sns_recommend.core.types import DatabaseConnection
 
 @contextmanager
 def connection() -> Iterator[DatabaseConnection]:
-    """Recommend database: vectors, profiles and checkpoints."""
+    """Recommend database: user events, vectors and checkpoints."""
     with psycopg.connect(settings().database_url, row_factory=dict_row) as conn:
         yield conn
 
@@ -52,6 +52,3 @@ def initialize() -> None:
         apply(conn, migrations.joinpath("source"))
     with connection() as conn:
         apply(conn, migrations)
-    from sns_recommend.storage.event_queue import migrate_legacy
-
-    migrate_legacy()

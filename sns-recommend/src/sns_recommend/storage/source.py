@@ -60,3 +60,11 @@ def alive_ids(post_ids: list[int]) -> set[int]:
             "SELECT id FROM posts WHERE id=ANY(%s) AND deleted_at IS NULL", (post_ids,)
         ).fetchall()
     return {row["id"] for row in rows}
+
+
+def post_bodies(post_ids: list[int]) -> dict[int, str]:
+    with source_connection() as conn:
+        rows = conn.execute(
+            "SELECT id,content FROM posts WHERE id=ANY(%s) AND deleted_at IS NULL", (post_ids,)
+        ).fetchall()
+    return {row["id"]: row["content"] for row in rows}

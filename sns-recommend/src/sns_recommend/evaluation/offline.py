@@ -8,7 +8,7 @@ from sns_recommend.core.config import settings
 from sns_recommend.core.resources import resource_directory
 from sns_recommend.core.types import EvaluationReport, QualityRow, RankingInput, StabilityRow
 from sns_recommend.evaluation.metrics import ndcg_at_k, recall_at_k
-from sns_recommend.providers.embeddings import CachedEmbeddings, FixtureEmbeddings, normalize
+from sns_recommend.providers.embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
 
@@ -24,7 +24,7 @@ def evaluate(path: str | Path | None = None, k: int = 10) -> EvaluationReport:
     corpus = [
         p for p in data["posts"] if cutoff < datetime.fromisoformat(p["created_at"]) <= observed
     ]
-    embedding = FixtureEmbeddings() if settings().model_mode == "fixture" else CachedEmbeddings()
+    embedding = FixtureEmbeddings() if settings().model_mode == "fixture" else ModelEmbeddings()
     vectors = embedding.embed_documents([p["body"] for p in data["posts"]])
     index = {p["id"]: v for p, v in zip(data["posts"], vectors, strict=True)}
     rows: list[QualityRow] = []
