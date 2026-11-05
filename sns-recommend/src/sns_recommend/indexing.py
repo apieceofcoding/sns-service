@@ -3,7 +3,26 @@ from langchain_core.documents import Document
 from . import source
 from .config import settings
 from .db import connection, source_connection
-from .embeddings import CachedEmbeddings, space, vector_sql
+from .embeddings import ModelEmbeddings, space, vector_sql
+
+
+def posts_needing_index():
+    """Compare post versions with stored vectors. Unchanged posts cost no model call."""
+    posts = source.posts_to_index()
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT post_id,content_version,space FROM post_embeddings"
+        ).fetchall()
+    stored = {r["post_id"]: r for r in rows}
+    needed = []
+    for post in posts:
+        row = stored.get(post["id"])
+        if post["visible"]:
+            if not row or row["content_version"] != post["version"] or row["space"] != space():
+                needed.append(post["id"])
+        elif row:
+            needed.append(post["id"])
+    return needed
 
 
 def index_posts(post_ids=None):
@@ -24,7 +43,7 @@ def index_posts(post_ids=None):
         for p in active
     ]
     vectors = (
-        CachedEmbeddings().embed_documents([d.page_content for d in documents]) if documents else []
+        ModelEmbeddings().embed_documents([d.page_content for d in documents]) if documents else []
     )
     # A post edited or deleted during the model call keeps no vector. Its own event indexes it.
     with source_connection() as original:

@@ -60,3 +60,11 @@ def recent_posts(user_id, reference, hours=48):
             WHERE {VISIBLE} AND user_id<>%s AND created_at<=%s AND created_at>=%s""",
             (user_id, reference, reference - timedelta(hours=hours)),
         ).fetchall()
+
+
+def post_bodies(post_ids):
+    with source_connection() as conn:
+        rows = conn.execute(
+            "SELECT id,content FROM posts WHERE id=ANY(%s) AND deleted_at IS NULL", (post_ids,)
+        ).fetchall()
+    return {row["id"]: row["content"] for row in rows}

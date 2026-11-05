@@ -1,1 +1,2 @@
+CREATE TABLE IF NOT EXISTS profiles (user_id bigint PRIMARY KEY);
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS generation bigint NOT NULL DEFAULT 0;

@@ -22,24 +22,19 @@ class RecommendActionTransactionTest {
         var dataSource = new DriverManagerDataSource(System.getenv("SNS_ACTION_TEST_DATABASE_URL"), "postgres", "postgres");
         jdbc = new JdbcTemplate(dataSource);
         transactions = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-        jdbc.execute("DROP TABLE IF EXISTS recommend_events, likes, posts CASCADE");
+        jdbc.execute("DROP TABLE IF EXISTS post_actions, posts CASCADE");
         jdbc.execute("CREATE TABLE posts(id bigint PRIMARY KEY, deleted_at timestamptz)");
-        jdbc.execute("CREATE TABLE likes(id bigint PRIMARY KEY)");
-        jdbc.execute("CREATE TABLE recommend_events(id uuid PRIMARY KEY, action text, user_id bigint, post_id bigint)");
+        jdbc.execute("CREATE TABLE post_actions(id uuid PRIMARY KEY, action text, user_id bigint, post_id bigint)");
+        jdbc.execute("CREATE UNIQUE INDEX post_actions_one_impression ON post_actions(user_id, post_id) WHERE action = 'impression'");
         jdbc.update("INSERT INTO posts VALUES (4, NULL)");
         actions = new RecommendActionRepository(jdbc);
     }
 
     @Test
-    void rollbackRemovesLikeAndEvent() {
-        var id = UUID.randomUUID();
-        assertThrows(IllegalStateException.class, () -> transactions.executeWithoutResult(status -> {
-            jdbc.update("INSERT INTO likes VALUES (1)");
-            actions.record(id, "like", 7, 4);
-            throw new IllegalStateException("simulate failure");
-        }));
-        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM likes", Integer.class));
-        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM recommend_events", Integer.class));
+    void repeatedImpressionKeepsOneRow() {
+        actions.record(UUID.randomUUID(), "impression", 7, 4);
+        actions.record(UUID.randomUUID(), "impression", 7, 4);
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM post_actions", Integer.class));
     }
 
     @Test
@@ -47,7 +42,7 @@ class RecommendActionTransactionTest {
         var id = UUID.randomUUID();
         actions.record(id, "click", 7, 4);
         actions.record(id, "click", 7, 4);
-        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM recommend_events", Integer.class));
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM post_actions", Integer.class));
         assertEquals(409, assertThrows(ResponseStatusException.class,
                 () -> actions.record(id, "click", 8, 4)).getStatusCode().value());
     }
