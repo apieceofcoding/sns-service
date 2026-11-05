@@ -3,7 +3,7 @@ import json
 
 from .baseline import baseline
 from .db import initialize, source_connection
-from .indexing import index_posts
+from .indexing import index_changes
 from .profiles import build_user_vector
 from .seed import seed
 from .source_demo import change_post, seed_actions
@@ -49,7 +49,7 @@ def main():
             "dimensions": len(vector) if vector is not None else 0,
         }
     elif args.command == "index":
-        result = index_posts()
+        result = index_changes()
     else:
         with source_connection() as conn:
             result = {
