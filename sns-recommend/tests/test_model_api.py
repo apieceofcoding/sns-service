@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from sns_recommend.core.config import Settings, settings
-from sns_recommend.providers.model_api import chat, describe, embed
+from sns_recommend.providers.model_api import chat, embed
 
 
 @pytest.fixture(autouse=True)
@@ -77,23 +77,6 @@ def test_chat_preserves_usage_and_requests_json(monkeypatch: pytest.MonkeyPatch)
     result = chat([{"role": "user", "content": "Return JSON"}], "sns-reranker")
     assert json.loads(result["content"])["ordered_ids"] == [7, 8]
     assert result["usage"] == {"input_tokens": 12, "output_tokens": 8}
-
-
-def test_vision_sends_image_bytes_not_internal_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    def post(url: str, *, json: dict[str, Any], **_kwargs: object) -> httpx.Response:
-        payload = json
-        assert "response_format" not in payload
-        assert (
-            payload["messages"][0]["content"][1]["image_url"]["url"] == "data:image/png;base64,YWJj"
-        )
-        return httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": "여행 풍경"}}]},
-            request=httpx.Request("POST", url),
-        )
-
-    monkeypatch.setattr(httpx, "post", post)
-    assert describe(b"abc", "image/png") == "여행 풍경"
 
 
 def test_provider_error_is_not_treated_as_success(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from threading import Event, Thread
@@ -9,7 +9,6 @@ from typing import Any
 from uuid import uuid4
 
 from sns_recommend.core.config import settings
-from sns_recommend.core.types import DatabaseConnection
 from sns_recommend.storage.feeds import current_created_at
 from sns_recommend.storage.postgres import connection
 
@@ -43,14 +42,14 @@ def enqueue(user_id: int, throttle: bool = False) -> str | None:
     return str(row["id"]) if row else None
 
 
-def claim(actions: Sequence[str], event_id: str | None = None) -> EventRecord | None:
+def claim(event_id: str | None = None) -> EventRecord | None:
     with connection() as conn:
         row = conn.execute(
-            """SELECT * FROM user_events WHERE action=ANY(%s) AND processed_at IS NULL
+            """SELECT * FROM user_events WHERE action='recommend.requested' AND processed_at IS NULL
             AND (%s::uuid IS NULL OR id=%s::uuid)
             AND (locked_until IS NULL OR locked_until<=now())
             ORDER BY occurred_at,id FOR UPDATE SKIP LOCKED LIMIT 1""",
-            (list(actions), event_id, event_id),
+            (event_id, event_id),
         ).fetchone()
         if row is None:
             return None

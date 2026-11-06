@@ -12,8 +12,8 @@ from sns_recommend.evaluation.offline import evaluate
 from sns_recommend.pipelines.graph import start_graph
 from sns_recommend.recommenders.baseline import baseline
 from sns_recommend.recommenders.retrieval import generate_embedding
+from sns_recommend.storage.event_queue import schedule_active
 from sns_recommend.storage.postgres import initialize, source_connection
-from sns_recommend.worker.scheduler import schedule_active
 
 
 def main() -> None:

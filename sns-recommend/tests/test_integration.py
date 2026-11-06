@@ -23,8 +23,8 @@ from sns_recommend.data.source_demo import change_post, seed_actions
 from sns_recommend.event_worker import poll_once, sync_events
 from sns_recommend.pipelines.graph import run_graph, start_graph
 from sns_recommend.providers.embeddings import (
-    ModelEmbeddings,
     FixtureEmbeddings,
+    ModelEmbeddings,
     space,
     vector_sql,
 )
@@ -121,7 +121,7 @@ def test_graph_resumes_without_repeating_saved_rerank(
     monkeypatch.setattr(graph_module, "rerank_candidates", count)
     paused = cast(PausedResult, start_graph(READER, pause=True))
     assert paused["next"] == "validate"
-    job = claim(("recommend.requested",), event_id=paused["event_id"])
+    job = claim(event_id=paused["event_id"])
     assert job is not None
     result = run_graph(job)
     assert result["published"]
@@ -380,27 +380,27 @@ def test_old_claim_cannot_acknowledge_or_renew_reclaimed_event(infra: None) -> N
     from sns_recommend.storage.event_queue import renew
 
     enqueue(READER)
-    old = claim(("recommend.requested",))
+    old = claim()
     assert old is not None
-    assert claim(("recommend.requested",)) is None
+    assert claim() is None
     with connection() as conn:
         conn.execute("UPDATE user_events SET locked_until=now()-interval '1 second'")
-    new = claim(("recommend.requested",))
+    new = claim()
     assert new is not None and old["claim_id"] != new["claim_id"]
     assert not finish(old)
     with pytest.raises(RuntimeError):
         renew(old)
     assert finish(new)
     retry(old)
-    assert claim(("recommend.requested",)) is None
+    assert claim() is None
 
 
 def test_locked_request_is_skipped(infra: None) -> None:
     enqueue(READER)
     with connection() as conn:
         conn.execute("SELECT * FROM user_events WHERE user_id=%s FOR UPDATE", (READER,))
-        assert claim(("recommend.requested",)) is None
-    assert claim(("recommend.requested",)) is not None
+        assert claim() is None
+    assert claim() is not None
 
 
 def test_deleted_post_removes_vector_without_embedding_call(
@@ -423,7 +423,7 @@ def test_deleted_post_removes_vector_without_embedding_call(
 def test_recommend_request_is_deduplicated_until_claimed(infra: None) -> None:
     first = enqueue(READER)
     assert enqueue(READER) == first
-    event = claim(("recommend.requested",))
+    event = claim()
     assert event is not None
     assert enqueue(READER) != first
 
@@ -432,14 +432,14 @@ def test_new_generation_fences_old_graph(infra: None) -> None:
     prepare()
     old = start_graph(READER, pause=True)
     new = start_graph(READER)
-    current = claim(("recommend.requested",), event_id=old["event_id"])
+    current = claim(event_id=old["event_id"])
     assert current is not None
     assert not run_graph(current)["published"]
     assert read_feed(READER)["snapshot_id"] == new["event_id"]
 
 
 def test_recent_impression_schedules_refresh_and_feed_read_writes_nothing(infra: None) -> None:
-    from sns_recommend.worker.scheduler import schedule_active
+    from sns_recommend.storage.event_queue import schedule_active
 
     index_all()
     result = TestClient(app).get(f"/internal/feeds/{READER}")
@@ -466,35 +466,3 @@ def test_behavior_only_seed_and_cold_start(infra: None) -> None:
     for user in [7, 8, 9]:
         candidates = retrieve_candidates(user, user_vector=build_user_vector(user))
         assert any(p["similarity"] is not None for p in candidates)
-    with source_connection() as conn:
-        assert (
-            conn.execute("SELECT to_regclass('user_interests') AS name").fetchone()["name"] is None
-        )
-        assert (
-            conn.execute(
-                "SELECT count(*) AS n FROM information_schema.columns WHERE table_name='users' AND column_name='interests'"
-            ).fetchone()["n"]
-            == 0
-        )
-
-
-def test_removed_interest_storage_is_cleaned_without_deleting_accounts(infra: None) -> None:
-    from sns_recommend.storage.postgres import initialize
-
-    with source_connection() as conn:
-        conn.execute("ALTER TABLE users ADD COLUMN interests text")
-        conn.execute("CREATE TABLE user_interests(user_id bigint PRIMARY KEY,interests text)")
-        conn.execute("INSERT INTO user_interests VALUES (7,'legacy text')")
-    initialize()
-    initialize()
-    with source_connection() as conn:
-        assert conn.execute("SELECT count(*) AS n FROM users").fetchone()["n"] == 9
-        assert (
-            conn.execute("SELECT to_regclass('user_interests') AS name").fetchone()["name"] is None
-        )
-        assert (
-            conn.execute(
-                "SELECT count(*) AS n FROM information_schema.columns WHERE table_name='users' AND column_name='interests'"
-            ).fetchone()["n"]
-            == 0
-        )

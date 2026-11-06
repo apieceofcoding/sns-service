@@ -62,9 +62,7 @@ def make_graph(
 ) -> CompiledStateGraph[FeedState, None, FeedState, FeedState]:
     def retrieve(state: FeedState) -> FeedState:
         guard(state)
-        result = prepare_inputs(state["user_id"])
-        guard(state)
-        return {"inputs": result}
+        return {"inputs": prepare_inputs(state["user_id"])}
 
     def rerank(state: FeedState) -> FeedState:
         guard(state)
@@ -155,10 +153,7 @@ def run_graph(event: EventRecord, pause: bool) -> GraphResult | PausedResult: ..
 
 
 def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedResult:
-    if event["user_id"] is None:
-        raise ValueError("recommend.requested requires user_id")
     started = perf_counter()
-    guard({"event_id": str(event["id"]), "claim_id": str(event["claim_id"])})
     with PostgresSaver.from_conn_string(settings().database_url) as saver:
         saver.setup()
         graph = make_graph(saver, pause)
@@ -177,7 +172,8 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
                     "claim_id": str(event["claim_id"]),
                     "generation": allocate_generation(),
                     "snapshot_id": str(event["id"]),
-                    "created_at": event["occurred_at"].timestamp(),
+                    # The list's age starts now, not when the request was queued.
+                    "created_at": datetime.now(UTC).timestamp(),
                     "graph_version": GRAPH_VERSION,
                 },
                 config,
@@ -209,8 +205,7 @@ def start_graph(user_id: int, pause: bool) -> GraphResult | PausedResult: ...
 
 
 def start_graph(user_id: int, pause: bool = False) -> GraphResult | PausedResult:
-    event_id = enqueue(user_id)
-    event = claim(("recommend.requested",), event_id=event_id)
+    event = claim(event_id=enqueue(user_id))
     if event is None:
         raise RuntimeError("event already owned by a worker")
     if pause:

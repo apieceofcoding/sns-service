@@ -18,7 +18,7 @@ def test_cursor_cannot_move_to_another_user() -> None:
         cursor_decode(cursor[:-4] + "AAAA", 1)
 
 
-def test_internal_api_accepts_requests_without_token() -> None:
+def test_feed_rejects_limit_out_of_range() -> None:
     client = TestClient(app)
     assert client.get("/internal/feeds/1?limit=0").status_code == 422
 
@@ -39,6 +39,5 @@ def test_cursor_query_is_bounded_before_storage_access(monkeypatch: pytest.Monke
     response = TestClient(app).get(
         "/internal/feeds/1",
         params={"cursor": "a" * 513},
-
     )
     assert response.status_code == 422

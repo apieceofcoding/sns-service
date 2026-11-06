@@ -15,7 +15,7 @@ from sns_recommend.core.types import (
     StabilityRow,
 )
 from sns_recommend.evaluation.metrics import ndcg_at_k, recall_at_k
-from sns_recommend.providers.embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
+from sns_recommend.providers.embeddings import FixtureEmbeddings, ModelEmbeddings, normalize
 from sns_recommend.providers.rerank import PROMPT_VERSION, ranking_strategy, rerank_candidates
 from sns_recommend.recommenders.ranking import diversify, validate_ranking
 from sns_recommend.recommenders.retrieval import merge_candidates

@@ -45,10 +45,6 @@ def initialize() -> None:
             ddl = ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
             ddl = ddl.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ")
             conn.execute(ddl)
-        conn.execute("DROP TABLE IF EXISTS user_interests")
-        conn.execute("DROP TRIGGER IF EXISTS recommend_interest_insert ON users")
-        conn.execute("DROP TRIGGER IF EXISTS recommend_interest_update ON users")
-        conn.execute("ALTER TABLE users DROP COLUMN IF EXISTS interests")
         apply(conn, migrations.joinpath("source"))
     with connection() as conn:
         apply(conn, migrations)

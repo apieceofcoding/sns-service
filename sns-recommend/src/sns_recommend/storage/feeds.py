@@ -29,7 +29,7 @@ if existing then
   ttl = redis.call('TTL', KEYS[1])
   if ttl < 1 then return 0 end
 end
-redis.call('SET', KEYS[2], ARGV[4], 'EX', ttl)
+redis.call('SET', KEYS[2], ARGV[1], 'EX', ttl)
 return 1
 """
 
@@ -66,7 +66,6 @@ def publish(
         encoded,
         settings().snapshot_ttl,
         generation,
-        encoded,
     )
     if code == -1:
         raise ValueError("snapshotId reused with different content")

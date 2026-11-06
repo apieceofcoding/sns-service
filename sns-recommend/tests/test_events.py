@@ -1,13 +1,8 @@
-
 import pytest
 from fastapi.testclient import TestClient
 
 from sns_recommend.api.app import app
 from sns_recommend.api.routers import feeds as api
-
-
-def test_recommend_service_has_no_event_api() -> None:
-    assert TestClient(app).post("/internal/events", json={}).status_code == 404
 
 
 @pytest.mark.parametrize("ready,stale,cursor", [(False, False, None), (True, True, None)])

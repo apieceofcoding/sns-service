@@ -9,20 +9,18 @@ import psycopg
 from redis.exceptions import RedisError
 
 from sns_recommend.pipelines.graph import run_graph
-from sns_recommend.storage.event_queue import claim, heartbeat, retry
-from sns_recommend.worker.scheduler import schedule_active
+from sns_recommend.storage.event_queue import claim, heartbeat, retry, schedule_active
 
 logger = logging.getLogger(__name__)
 
 
 def run_one() -> bool:
-    event = claim(("recommend.requested",))
+    event = claim()
     if event is None:
         return False
     try:
         with heartbeat(event):
             run_graph(event)
-
     except Exception as exc:
         logger.warning("Event %s failed: %s", event["id"], type(exc).__name__)
         retry(event)

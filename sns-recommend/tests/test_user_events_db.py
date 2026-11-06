@@ -220,8 +220,8 @@ def test_seed_actions_become_events_without_duplicates() -> None:
 def test_waiting_request_merges_while_claimed_one_runs() -> None:
     first = event_queue.enqueue(READER)
     assert event_queue.enqueue(READER) == first
-    claimed = event_queue.claim(("recommend.requested",))
-    assert claimed is not None and event_queue.claim(("recommend.requested",)) is None
+    claimed = event_queue.claim()
+    assert claimed is not None and event_queue.claim() is None
     assert event_queue.enqueue(READER) != first
     assert event_queue.finish(claimed)
 
