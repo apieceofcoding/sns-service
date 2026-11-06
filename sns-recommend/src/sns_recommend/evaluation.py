@@ -4,8 +4,14 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import settings
-from .embeddings import ModelEmbeddings, FixtureEmbeddings, normalize
-from .ranking import PROMPT_VERSION, diversify, rerank_candidates, validate_ranking
+from .embeddings import ModelEmbeddings, normalize
+from .ranking import (
+    PROMPT_VERSION,
+    diversify,
+    ranking_strategy,
+    rerank_candidates,
+    validate_ranking,
+)
 from .retrieval import merge_candidates
 
 
@@ -30,8 +36,7 @@ def evaluate(path="data/evaluation.json", k=10):
     corpus = [
         p for p in data["posts"] if cutoff < datetime.fromisoformat(p["created_at"]) <= observed
     ]
-    embedding = FixtureEmbeddings() if settings().model_mode == "fixture" else ModelEmbeddings()
-    vectors = embedding.embed_documents([p["body"] for p in data["posts"]])
+    vectors = ModelEmbeddings().embed_documents([p["body"] for p in data["posts"]])
     index = {p["id"]: v for p, v in zip(data["posts"], vectors, strict=True)}
     rows, stability = [], []
     for user in data["users"]:
@@ -68,9 +73,7 @@ def evaluate(path="data/evaluation.json", k=10):
             ],
             "popular": [p["id"] for p in sorted(corpus, key=lambda p: p["likes"], reverse=True)],
             "embedding": [p["id"] for p in candidates],
-            "fixture_llm" if settings().model_mode == "fixture" else "llm": diversify(
-                candidates, ordered
-            ),
+            ranking_strategy(response["mode"]): diversify(candidates, ordered),
         }
         labels = {str(p["id"]): int(p["topic"] == user["topic"]) for p in corpus}
         lookup = {p["id"]: p for p in corpus}
