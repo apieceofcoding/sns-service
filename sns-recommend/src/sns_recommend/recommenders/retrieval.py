@@ -12,7 +12,7 @@ from sns_recommend.data.events import excluded_ids
 from sns_recommend.data.profiles import build_user_vector
 from sns_recommend.providers.embeddings import space, vector_sql
 from sns_recommend.storage import source
-from sns_recommend.storage.event_queue import allocate_generation, current_generation
+from sns_recommend.storage.event_queue import allocate_generation
 from sns_recommend.storage.feeds import publish
 from sns_recommend.storage.postgres import connection
 
@@ -104,13 +104,9 @@ class PostRetriever(BaseRetriever):
 
 
 def generate_embedding(user_id: int) -> GenerationResult:
-    with connection() as conn:
-        generation = allocate_generation(conn, user_id)
+    generation = allocate_generation()
     user_vector = build_user_vector(user_id)
     docs = PostRetriever(user_id=user_id, user_vector=user_vector).invoke("recent reactions")
     ids = [d.metadata["id"] for d in docs]
-    with connection() as conn:
-        published = current_generation(conn, user_id) == generation and publish(
-            user_id, ids, "embedding", generation
-        )
+    published = publish(user_id, ids, "embedding", generation)
     return {"strategy": "embedding", "post_ids": ids, "published": published}
