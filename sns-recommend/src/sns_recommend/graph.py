@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal, TypedDict, overload
+from typing import Any, TypedDict
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -20,19 +20,15 @@ from .event_queue import (
     renew,
 )
 from .feed import publish
-from .ranking import diversify, prepare_inputs, rerank_candidates, validate_ranking
-
-type GraphResult = dict[str, Any]
-type EventRecord = dict[str, Any]
-type PausedResult = dict[str, Any]
-type RankingInput = dict[str, Any]
-type RankingResult = dict[str, Any]
+from .ranking import (
+    diversify,
+    prepare_inputs,
+    ranking_strategy,
+    rerank_candidates,
+    validate_ranking,
+)
 
 GRAPH_VERSION = "sns-feed-behavior-v3"
-
-
-def ranking_strategy(mode: str) -> str:
-    return {"fixture": "fixture_llm", "replay": "replay_llm"}.get(mode, "llm")
 
 
 class FeedState(TypedDict, total=False):
@@ -43,8 +39,8 @@ class FeedState(TypedDict, total=False):
     snapshot_id: str
     created_at: float
     graph_version: str
-    inputs: RankingInput
-    response: RankingResult
+    inputs: dict[str, Any]
+    response: dict[str, Any]
     ordered: list[int]
     valid: bool
     strategy: str
@@ -53,6 +49,7 @@ class FeedState(TypedDict, total=False):
 
 
 def guard(state: FeedState) -> None:
+    """Stop this node if another worker took over the request."""
     renew({"id": state["event_id"], "claim_id": state["claim_id"]})
 
 
@@ -61,9 +58,7 @@ def make_graph(
 ) -> CompiledStateGraph[FeedState, None, FeedState, FeedState]:
     def retrieve(state: FeedState) -> FeedState:
         guard(state)
-        result = prepare_inputs(state["user_id"])
-        guard(state)
-        return {"inputs": result}
+        return {"inputs": prepare_inputs(state["user_id"])}
 
     def rerank(state: FeedState) -> FeedState:
         guard(state)
@@ -76,7 +71,6 @@ def make_graph(
                 "response": {"ordered_ids": [], "mode": settings().model_mode, "usage": {}},
                 "error": type(exc).__name__,
             }
-        guard(state)
         return answer
 
     def validate(state: FeedState) -> FeedState:
@@ -145,18 +139,7 @@ def make_graph(
     return builder.compile(checkpointer=checkpointer, interrupt_after=["rerank"] if pause else [])
 
 
-@overload
-def run_graph(event: EventRecord, pause: Literal[False] = False) -> GraphResult: ...
-
-
-@overload
-def run_graph(event: EventRecord, pause: bool) -> GraphResult | PausedResult: ...
-
-
-def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedResult:
-    if event["user_id"] is None:
-        raise ValueError("recommend.requested requires user_id")
-    guard({"event_id": str(event["id"]), "claim_id": str(event["claim_id"])})
+def run_graph(event: dict[str, Any], pause: bool = False) -> dict[str, Any]:
     with PostgresSaver.from_conn_string(settings().database_url) as saver:
         saver.setup()
         graph = make_graph(saver, pause)
@@ -175,7 +158,8 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
                     "claim_id": str(event["claim_id"]),
                     "generation": allocate_generation(),
                     "snapshot_id": str(event["id"]),
-                    "created_at": event["occurred_at"].timestamp(),
+                    # The list's age starts now, not when the request was queued.
+                    "created_at": datetime.now(UTC).timestamp(),
                     "graph_version": GRAPH_VERSION,
                 },
                 config,
@@ -197,17 +181,8 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
     }
 
 
-@overload
-def start_graph(user_id: int, pause: Literal[False] = False) -> GraphResult: ...
-
-
-@overload
-def start_graph(user_id: int, pause: bool) -> GraphResult | PausedResult: ...
-
-
-def start_graph(user_id: int, pause: bool = False) -> GraphResult | PausedResult:
-    event_id = enqueue(user_id)
-    event = claim(("recommend.requested",), event_id=event_id)
+def start_graph(user_id: int, pause: bool = False) -> dict[str, Any]:
+    event = claim(event_id=enqueue(user_id))
     if event is None:
         raise RuntimeError("event already owned by a worker")
     if pause:

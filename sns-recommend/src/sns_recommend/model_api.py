@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import math
 from typing import Any
 
@@ -91,26 +90,3 @@ def chat(messages: list[dict[str, Any]], model: str, *, json_output: bool = True
             if type(value) is int and value >= 0:
                 usage[target] = value
     return {"content": message["content"], "usage": usage}
-
-
-def describe(image: bytes, mime_type: str) -> str:
-    if (
-        mime_type not in {"image/jpeg", "image/png", "image/webp"}
-        or not image
-        or len(image) > 5 * 1024 * 1024
-    ):
-        raise ValueError("use a JPEG, PNG or WebP image up to 5 MB")
-    encoded = base64.b64encode(image).decode("ascii")
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "이미지에 보이는 장면과 주제를 한국어 두 문장으로 설명하세요. 보이지 않는 정보는 추측하지 마세요.",
-                },
-                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}},
-            ],
-        }
-    ]
-    return chat(messages, settings().rerank_model, json_output=False)["content"]

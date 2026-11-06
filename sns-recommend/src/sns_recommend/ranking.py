@@ -13,6 +13,12 @@ from .profiles import build_user_vector
 from .retrieval import retrieve_candidates
 
 PROMPT_VERSION = "sns-rank-behavior-v2"
+
+
+def ranking_strategy(mode):
+    return {"fixture": "fixture_llm", "replay": "replay_llm"}.get(mode, "llm")
+
+
 PROMPT = ChatPromptTemplate.from_messages(
     [
         (

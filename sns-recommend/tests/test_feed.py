@@ -1,7 +1,8 @@
 import pytest
-from sns_recommend.feed import cursor_decode, cursor_encode
 from fastapi.testclient import TestClient
+
 from sns_recommend.api import app
+from sns_recommend.feed import cursor_decode, cursor_encode
 
 
 def test_cursor_cannot_move_to_another_user():
@@ -13,6 +14,6 @@ def test_cursor_cannot_move_to_another_user():
         cursor_decode(cursor[:-4] + "AAAA", 1)
 
 
-def test_internal_api_accepts_requests_without_token():
+def test_feed_rejects_limit_out_of_range():
     client = TestClient(app)
     assert client.get("/internal/feeds/1?limit=0").status_code == 422
