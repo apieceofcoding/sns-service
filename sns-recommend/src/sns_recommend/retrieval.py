@@ -90,8 +90,6 @@ class PostRetriever(BaseRetriever):
 def generate_embedding(user_id):
     user_vector = build_user_vector(user_id)
     docs = PostRetriever(user_id=user_id, user_vector=user_vector).invoke("recent reactions")
-    with connection() as conn:
-        generation = allocate_generation(conn, user_id)
     ids = [d.metadata["id"] for d in docs]
-    publish(user_id, ids, "embedding", generation)
+    publish(user_id, ids, "embedding", allocate_generation())
     return {"strategy": "embedding", "post_ids": ids}

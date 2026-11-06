@@ -14,7 +14,6 @@ from .db import connection
 from .event_queue import (
     allocate_generation,
     claim,
-    current_generation,
     enqueue,
     finish,
     heartbeat,
@@ -114,20 +113,16 @@ def make_graph(
                 or event["locked_until"] <= datetime.now(UTC)
             ):
                 return {"published": False}
-            with connection() as conn:
-                if (
-                    current_generation(conn, state["user_id"]) != state["generation"]
-                    or datetime.now(UTC).timestamp() - state["created_at"] > settings().snapshot_ttl
-                ):
-                    return {"published": False}
-                published = publish(
-                    state["user_id"],
-                    state["ordered"],
-                    state["strategy"],
-                    state["generation"],
-                    state["snapshot_id"],
-                    state["created_at"],
-                )
+            if datetime.now(UTC).timestamp() - state["created_at"] > settings().snapshot_ttl:
+                return {"published": False}
+            published = publish(
+                state["user_id"],
+                state["ordered"],
+                state["strategy"],
+                state["generation"],
+                state["snapshot_id"],
+                state["created_at"],
+            )
         return {"published": published}
 
     builder = StateGraph(FeedState)
@@ -173,14 +168,12 @@ def run_graph(event: EventRecord, pause: bool = False) -> GraphResult | PausedRe
             graph.update_state(config, {"claim_id": str(event["claim_id"])}, as_node=None)
             result = graph.invoke(None, config)
         else:
-            with connection() as conn:
-                generation = allocate_generation(conn, event["user_id"])
             result = graph.invoke(
                 {
                     "user_id": event["user_id"],
                     "event_id": str(event["id"]),
                     "claim_id": str(event["claim_id"]),
-                    "generation": generation,
+                    "generation": allocate_generation(),
                     "snapshot_id": str(event["id"]),
                     "created_at": event["occurred_at"].timestamp(),
                     "graph_version": GRAPH_VERSION,

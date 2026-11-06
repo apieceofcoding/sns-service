@@ -119,20 +119,9 @@ def retry(event: EventRecord) -> None:
         )
 
 
-def allocate_generation(conn: Any, user_id: int) -> int:
-    row = conn.execute(
-        """INSERT INTO profiles(user_id,generation) VALUES (%s,%s)
-        ON CONFLICT(user_id) DO UPDATE SET generation=GREATEST(profiles.generation+1,EXCLUDED.generation) RETURNING generation""",
-        (user_id, time.time_ns() // 1000),
-    ).fetchone()
-    return row["generation"]
-
-
-def current_generation(conn: Any, user_id: int) -> int:
-    conn.execute("INSERT INTO profiles(user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
-    return conn.execute(
-        "SELECT generation FROM profiles WHERE user_id=%s FOR UPDATE", (user_id,)
-    ).fetchone()["generation"]
+def allocate_generation() -> int:
+    # A later run gets a larger number, so Redis can reject results from older runs.
+    return time.time_ns() // 1000
 
 
 def schedule_active() -> dict[str, int]:
