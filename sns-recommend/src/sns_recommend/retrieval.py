@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
@@ -15,7 +15,7 @@ from .profiles import build_user_vector
 def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
-    reference = as_of or datetime.now(timezone.utc)
+    reference = as_of or datetime.now(UTC)
     posts = source.recent_posts(user_id, reference)
     with connection() as conn:
         valid = user_vector is not None

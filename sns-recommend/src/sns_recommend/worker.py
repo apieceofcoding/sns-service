@@ -15,13 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def run_one() -> bool:
-    event = claim(("recommend.requested",))
+    event = claim()
     if event is None:
         return False
     try:
         with heartbeat(event):
             run_graph(event)
-
     except Exception as exc:
         logger.warning("Event %s failed: %s", event["id"], type(exc).__name__)
         retry(event)

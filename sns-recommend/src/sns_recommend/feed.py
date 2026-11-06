@@ -8,16 +8,20 @@ from redis import Redis
 
 from .config import settings
 
+# Publish only if no newer run has published. A resumed run reuses its snapshot and its TTL.
 PUBLISH = """
 local existing = redis.call('GET', KEYS[1])
 if existing and existing ~= ARGV[1] then return -1 end
 local current = redis.call('GET', KEYS[2])
-if current then
-  local meta = cjson.decode(current)
-  if tonumber(meta.generation or 0) > tonumber(ARGV[3]) then return 0 end
+if current and tonumber(cjson.decode(current).generation or 0) > tonumber(ARGV[3]) then return 0 end
+local ttl = tonumber(ARGV[2])
+if existing then
+  ttl = redis.call('TTL', KEYS[1])
+  if ttl < 1 then return 0 end
+else
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ttl)
 end
-if not existing then redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]) end
-redis.call('SET', KEYS[2], ARGV[4], 'EX', ARGV[2])
+redis.call('SET', KEYS[2], ARGV[1], 'EX', ttl)
 return 1
 """
 
@@ -47,7 +51,6 @@ def publish(user_id, ids, strategy, generation, snapshot_id=None, created_at=Non
         encoded,
         settings().snapshot_ttl,
         generation,
-        encoded,
     )
     if code == -1:
         raise ValueError("snapshotId reused with different content")

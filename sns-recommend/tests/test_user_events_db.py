@@ -226,8 +226,8 @@ def test_seed_actions_become_events_without_duplicates() -> None:
 def test_waiting_request_merges_while_claimed_one_runs() -> None:
     first = event_queue.enqueue(READER)
     assert event_queue.enqueue(READER) == first
-    claimed = event_queue.claim(("recommend.requested",))
-    assert claimed is not None and event_queue.claim(("recommend.requested",)) is None
+    claimed = event_queue.claim()
+    assert claimed is not None and event_queue.claim() is None
     assert event_queue.enqueue(READER) != first
     assert event_queue.finish(claimed)
 
@@ -244,9 +244,7 @@ def test_history_skips_cancelled_likes_and_deleted_posts() -> None:
     assert history[0]["body"]
 
 
-def test_graph_generates_from_request_and_marks_it_processed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_graph_generates_from_request_and_marks_it_processed() -> None:
     from sns_recommend import graph
 
     event_worker.poll_once()
@@ -255,3 +253,16 @@ def test_graph_generates_from_request_and_marks_it_processed(
     result = graph.start_graph(READER)
     assert result["published"] is True and result["post_ids"]
     assert rows("recommend.requested")[0]["processed_at"] is not None
+
+
+def test_request_queued_long_ago_is_still_published() -> None:
+    from sns_recommend import graph
+
+    event_worker.poll_once()
+    event_queue.enqueue(READER)
+    with connection() as conn:
+        conn.execute(
+            "UPDATE user_events SET occurred_at=now()-interval '2 hours' "
+            "WHERE action='recommend.requested'"
+        )
+    assert graph.start_graph(READER)["published"] is True
