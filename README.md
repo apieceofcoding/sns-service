@@ -66,7 +66,7 @@ cd sns-service/sns-recommend
 
 명령은 `sns-recommend/`에서 시작합니다. 브랜치를 바꾸기 전 추천 API와 worker를 `Ctrl+C`로 종료해요. Windows에서는 `./gradlew`를 `.\gradlew.bat`로, `curl`을 `curl.exe`로 바꿉니다.
 
-### part-1. SNS 실행과 데이터 관찰
+### part-1. 기존 SNS와 실습 환경
 
 ```sh
 # sns-recommend/에서 SNS 앱 실행
@@ -103,7 +103,7 @@ npm run dev
 
 [SNS 화면](http://localhost:3000)에서 `recommenddemo` / `recommend1234`로 가입하고 로그인해요. 이미 가입했다면 로그인만 합니다. 글 작성도 확인하세요. `seed`로 만든 독자 7~9번은 추천 비교용이며 비밀번호가 없습니다.
 
-### part-2. 추천 생성과 조회
+### part-2. 저장된 추천 피드 조회
 
 ```sh
 # 실습 터미널: sns-recommend/ (SNS 화면은 켜 두기)
@@ -181,7 +181,7 @@ uv run sns-recommend-event-worker
 좋아요, 답글과 재게시는 SNS 앱의 기존 저장 그대로입니다. 취소하거나 삭제하면 worker가 `removed_at`을 채워 추천에서 빠져요. 노출과 클릭은 원본 테이블이 없어서 `POST /api/v1/recommend/actions`가 `post_actions`에 저장합니다. 화면의 게시글 카드가 이 요청을 보내고, 사용자 ID는 로그인 세션에서 읽어요. 같은 글의 노출은 한 행만 남고, 클릭의 재전송은 같은 eventId로 구분합니다. `seed-actions`는 독자별 합성 좋아요를 `likes`에 넣는 준비 명령입니다.
 
 ```sh
-# 로그인 쿠키 저장 (1단원에서 가입한 계정)
+# 로그인 쿠키 저장 (part-1에서 가입한 계정)
 curl -fsS -c cookies.txt -X POST http://localhost:8080/api/v1/login -d 'username=recommenddemo&password=recommend1234'
 # 클릭 기록. 같은 행동을 재전송할 때는 같은 eventId 사용
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions -H 'Content-Type: application/json' -d '{"eventId":"03b9e8fe-a243-48b8-9048-11c48ce52001","action":"click","postId":4}'
@@ -189,7 +189,7 @@ curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions 
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/likes -H 'Content-Type: application/json' -d '{"postId":1}'
 uv run sns-recommend-event-worker --once
 
-# 2단원에서 실행한 추천 API를 종료하고 새 터미널에서 다시 실행
+# part-2에서 실행한 추천 API를 종료하고 새 터미널에서 다시 실행
 uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
 ```
 
@@ -198,7 +198,7 @@ uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
 curl -fsS http://localhost:8001/internal/feeds/7
 ```
 
-좋아요, 답글, 재게시와 클릭이 추가되거나 취소되면 worker가 추천 갱신을 예약해요. 최근 30분 내 노출이 있는 사용자의 목록이 없거나 5분이 지났을 때도 예약합니다. 이 경우 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합쳐요. 3단원에서는 기록과 예약까지만 확인하며, 추천 worker의 처리와 복구는 4단원에서 연결합니다. 6단원에서는 비용과 갱신 주기를 검증해요.
+좋아요, 답글, 재게시와 클릭이 추가되거나 취소되면 worker가 추천 갱신을 예약해요. 최근 30분 내 노출이 있는 사용자의 목록이 없거나 5분이 지났을 때도 예약합니다. 이 경우 기본 60초 간격으로 제한하고, 같은 사용자의 대기 요청은 합쳐요. part-3에서는 기록과 예약까지만 확인해요. 예약된 요청은 part-4의 추천 worker가 처리하고, part-6에서 갱신 주기와 비용을 확인합니다.
 
 ```sql
 -- 추천 DB에서 기록 확인
@@ -234,16 +234,17 @@ uv run sns-recommend graph --user 8
 uv run sns-recommend graph --user 9
 # 재정렬 직후 멈춘 뒤 worker로 이어서 실행
 uv run sns-recommend graph --user 7 --pause-after-rerank
+# processed가 false가 될 때까지 반복
 uv run python -m sns_recommend.worker --once
 ```
 
 의미 검색, 최신순과 인기순 후보를 합치고 본인 글, 삭제 글, 이미 본 글을 제외합니다. 행동이 없으면 최신순과 인기순으로 시작해요. 검색에서 빠진 글은 LLM이 선택할 수 없으므로 후보를 먼저 확인합니다.
 
-`embedding`과 `graph`는 실행 시 최신 행동으로 사용자 벡터를 다시 계산합니다. 새 모델 호출 없이 3단원의 함수를 재사용해요. `graph`는 후보만 LLM에 보내고, 반환 ID 검증과 다양성 조정을 거쳐 Redis에 저장합니다. 오류가 나면 후보 순위로 대체해요.
+`embedding`과 `graph`는 실행 시 최신 행동으로 사용자 벡터를 다시 계산합니다. 새 모델 호출 없이 part-3의 함수를 재사용해요. `graph`는 후보만 LLM에 보내고, 반환 ID 검증과 다양성 조정을 거쳐 Redis에 저장합니다. 오류가 나면 후보 순위로 대체해요.
 
-체크포인트에 진행 상태를 저장하고, 생성 번호로 오래된 결과의 발행을 막습니다. 체크포인트 테이블은 자동으로 준비해요. worker는 가장 오래된 대기 요청부터 처리하므로, 다른 요청이 남아 있으면 멈춘 작업은 그 뒤에 이어집니다.
+체크포인트에 진행 상태를 저장하고, 생성 세대(실행 시작 시각)로 오래된 결과의 발행을 막습니다. 체크포인트 테이블은 자동으로 준비해요. worker는 가장 오래된 대기 요청부터 하나씩 처리하므로, 다른 요청이 남아 있으면 멈춘 작업은 그 뒤에 이어집니다.
 
-### part-5. 품질 평가
+### part-5. 추천 품질 비교
 
 ```sh
 git switch part-5-evaluation
@@ -253,7 +254,7 @@ uv run sns-recommend evaluate
 
 `sns-recommend/reports/evaluation.json`에서 합성 데이터의 전략별 점수를 비교합니다.
 
-### part-6. 갱신 주기와 조회 비용 검증
+### part-6. 조회 속도와 생성 비용 검증
 
 ```sh
 # SNS 앱 다시 빌드
@@ -271,12 +272,12 @@ uv run sns-recommend benchmark --user 7
 `sns-recommend/reports/benchmark.json`에서 Redis 조회 속도와 목록 나이를 확인해요. 추천 API를 중단하고 같은 브라우저에서 [추천 피드 API](http://localhost:8080/api/v1/recommend)를 새로고침하면 `mode: latest`로 응답합니다.
 
 ```sh
-# 2단원 명령으로 API를 다시 켜고 브라우저에서 추천 피드 조회
+# part-2 명령으로 API를 다시 켜고 브라우저에서 추천 피드 조회
 # 새 터미널: sns-recommend/에서 worker 실행
 uv run python -m sns_recommend.worker
 ```
 
-worker는 3단원에서 정의한 예약 규칙을 30초마다 실행합니다. 기록 구조를 바꾸지 않고, 갱신 주기와 목록 나이, 생성 비용을 확인해요.
+worker는 part-3에서 정의한 예약 규칙을 30초마다 실행합니다. 행동 기록 구조는 그대로 두고, 갱신 주기와 목록 나이, 생성 비용을 확인해요.
 
 ## 종료
 
@@ -326,7 +327,7 @@ docker compose up -d --wait  # part-2부터
 
 ## 모델 설정
 
-기본 실습은 **최신 Ollama로 로컬 모델을 실제 호출**합니다. 외부 API 키와 사용료는 필요 없어요. 3단원부터 적용합니다.
+기본 실습은 **최신 Ollama로 로컬 모델을 실제 호출**합니다. 외부 API 키와 사용료는 필요 없어요. part-3부터 적용합니다.
 
 ```sh
 # Ollama 설치 후 sns-recommend/에서 한 번 준비
@@ -364,4 +365,4 @@ Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 
 
 OpenAI API는 강사용 비교 선택입니다. 서버 주소, 모델명과 키를 계정에서 사용 가능한 값으로 바꿔요. 수강생 기본 실습은 OpenAI 결제를 요구하지 않습니다. 키와 녹화 파일은 Git에 넣지 않습니다.
 
-5단원은 합성 정답셋 평가, 6단원 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
+part-5는 합성 정답셋 평가, part-6 benchmark는 Redis 읽기 측정입니다. 로컬 모델도 호출 횟수와 생성 시간을 기록해요. 일일 20회 제한은 실습의 과도한 작업을 막는 설정이며 제공자 한도가 아닙니다.
