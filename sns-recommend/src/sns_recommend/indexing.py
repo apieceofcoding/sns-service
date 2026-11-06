@@ -63,8 +63,6 @@ def index_posts(post_ids):
         ).fetchall()
     indexed = {r["post_id"]: r["content_version"] for r in rows}
     active = [p for p in posts if p["visible"] and indexed.get(p["id"]) != p["version"]]
-    if settings().model_mode in {"live", "record"}:
-        active = active[:20]  # Call again for the next small batch.
     documents = [
         Document(page_content=p["body"], metadata={"id": p["id"], "version": p["version"]})
         for p in active
@@ -94,6 +92,6 @@ def index_posts(post_ids):
                 )
                 stored += 1
             visible = {p["id"] for p in posts if p["visible"]}
-            gone = [i for i in {*ids, *post_ids} if i not in visible]
+            gone = list(set(post_ids) - visible)
             conn.execute("DELETE FROM post_embeddings WHERE post_id=ANY(%s)", (gone,))
     return {"indexed": stored, "mode": settings().model_mode, "space": space()}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import math
 from typing import Any
 
@@ -57,60 +56,3 @@ def embed(texts: list[str]) -> list[list[float]]:
     ):
         raise ValueError("invalid embedding dimensions or values")
     return vectors
-
-
-def chat(messages: list[dict[str, Any]], model: str, *, json_output: bool = True) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "stream": False,
-        "temperature": 0,
-        "max_tokens": 1024,
-    }
-    if json_output:
-        payload["response_format"] = {"type": "json_object"}
-    response = _post("chat/completions", payload)
-    choices = response.get("choices")
-    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
-        raise ValueError("invalid chat response")
-    message = choices[0].get("message")
-    if (
-        not isinstance(message, dict)
-        or not isinstance(message.get("content"), str)
-        or not message["content"].strip()
-    ):
-        raise ValueError("empty chat response")
-    raw_usage = response.get("usage") or {}
-    usage = {}
-    if isinstance(raw_usage, dict):
-        for source, target in (
-            ("prompt_tokens", "input_tokens"),
-            ("completion_tokens", "output_tokens"),
-        ):
-            value = raw_usage.get(source)
-            if type(value) is int and value >= 0:
-                usage[target] = value
-    return {"content": message["content"], "usage": usage}
-
-
-def describe(image: bytes, mime_type: str) -> str:
-    if (
-        mime_type not in {"image/jpeg", "image/png", "image/webp"}
-        or not image
-        or len(image) > 5 * 1024 * 1024
-    ):
-        raise ValueError("use a JPEG, PNG or WebP image up to 5 MB")
-    encoded = base64.b64encode(image).decode("ascii")
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "이미지에 보이는 장면과 주제를 한국어 두 문장으로 설명하세요. 보이지 않는 정보는 추측하지 마세요.",
-                },
-                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}},
-            ],
-        }
-    ]
-    return chat(messages, settings().rerank_model, json_output=False)["content"]

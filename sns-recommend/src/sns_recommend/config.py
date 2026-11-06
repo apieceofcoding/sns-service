@@ -17,12 +17,10 @@ class Settings(BaseSettings):
     model_base_url: str = "http://localhost:11434/v1"
     model_timeout_seconds: float = 120
     embedding_model: str = "qwen3-embedding:0.6b"
-    rerank_model: str = "sns-reranker"
     dimensions: int = 768
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
     minimum_refresh_seconds: int = 60
-    daily_call_limit: int = 20
     recordings_dir: str = "recordings"
 
 
