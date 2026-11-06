@@ -44,7 +44,6 @@ def test_feed_api_without_token_and_cursor_errors(user):
     assert first["post_ids"] == [1]
     cursor = first["next_cursor"]
     assert client.get(f"/internal/feeds/{user + 1}", params={"cursor": cursor}).status_code == 400
-    assert client.get(f"/internal/feeds/{user}", params={"cursor": ""}).status_code == 400
     redis_client().delete(f"recommend:feed:{user}:{first['snapshot_id']}")
     assert client.get(f"/internal/feeds/{user}", params={"cursor": cursor}).status_code == 410
 

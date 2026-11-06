@@ -22,7 +22,6 @@ def publish(user_id, ids, strategy):
         "ids": ids,
         "strategy": strategy,
         "created_at": time.time(),
-        "generation": 0,
     }
     encoded = json.dumps(payload)
     with redis_client().pipeline() as pipe:
@@ -54,7 +53,7 @@ def cursor_decode(cursor, user_id):
 
 def read_feed(user_id, limit=20, cursor=None):
     r = redis_client()
-    if cursor is not None:
+    if cursor:
         snapshot, offset = cursor_decode(cursor, user_id)
         raw = r.get(f"recommend:feed:{user_id}:{snapshot}")
         if raw is None:
