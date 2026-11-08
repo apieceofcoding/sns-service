@@ -46,9 +46,13 @@ def seed():
                 VALUES (%s,%s,%s,%s,0,0,0,%s,%s) ON CONFLICT DO NOTHING""",
                 (i, author_id, body, (i * 17) % 101, post_created_at(i, now, group_size=6), now),
             )
-        # Explicit seed IDs must not collide with the app's next generated ID.
-        for table in ("users", "posts"):
-            conn.execute(f"""SELECT setval(pg_get_serial_sequence('{table}', 'id'),
-                GREATEST((SELECT max(id) FROM {table}),
-                         nextval(pg_get_serial_sequence('{table}', 'id'))), true)""")
+        advance_identity(conn, "users", "posts")
     return {"users": 9, "posts": 240, "data": "synthetic", "reference_time": now.isoformat()}
+
+
+def advance_identity(conn, *tables):
+    # Explicit IDs must not collide with the app's next generated ID.
+    for table in tables:
+        conn.execute(f"""SELECT setval(pg_get_serial_sequence('{table}', 'id'),
+            GREATEST((SELECT max(id) FROM {table}),
+                     nextval(pg_get_serial_sequence('{table}', 'id'))), true)""")
