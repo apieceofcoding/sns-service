@@ -2,17 +2,30 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 from .db import connection
 from .event_queue import allocate_generation, claim, enqueue, finish, heartbeat
 from .feed import publish
+from .measurement import record_generation
 from .profiles import build_user_vector
 from .ranking import diversify, rank
 from .retrieval import retrieve_candidates
 
 
 def generate(event: dict) -> dict:
+    started = time.perf_counter()
+    try:
+        result = run(event)
+    except Exception as exc:
+        record_generation(event, (time.perf_counter() - started) * 1000, None, type(exc).__name__)
+        raise
+    record_generation(event, (time.perf_counter() - started) * 1000, result)
+    return result
+
+
+def run(event: dict) -> dict:
     user_id = event["user_id"]
     generation = allocate_generation()
     created_at = datetime.now(UTC).timestamp()

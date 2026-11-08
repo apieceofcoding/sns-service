@@ -19,7 +19,7 @@ def main():
     post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
     post.add_argument("--post", type=int, default=1001)
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
-    for name in ("profile", "candidates", "generate"):
+    for name in ("profile", "candidates", "generate", "benchmark"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     baseline = commands.add_parser("baseline")
     baseline.add_argument("--user", type=int, default=7)
@@ -98,4 +98,6 @@ def run(args):
         from .trainer import monitor
 
         return monitor(args.hours)
-    raise ValueError(args.command)
+    from .benchmark import benchmark
+
+    return benchmark(args.user)

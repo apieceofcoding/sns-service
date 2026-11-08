@@ -5,6 +5,7 @@ from redis.exceptions import RedisError
 from . import source
 from .events import excluded_ids
 from .feed import read_feed
+from .measurement import metrics
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
 
@@ -12,6 +13,11 @@ app = FastAPI(title="SNS Recommend", version="0.1.0")
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def measurements(minutes: int = Query(60, ge=1, le=1440)):
+    return metrics(minutes)
 
 
 @app.get("/internal/feeds/{user_id}")
