@@ -21,6 +21,7 @@ def main():
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     for name in ("profile", "candidates"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
+    commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
 
@@ -64,4 +65,8 @@ def run(args):
         rows = retrieve_candidates(args.user, user_vector=build_user_vector(args.user))
         keys = ("id", "author_id", "similarity", "sources")
         return [{k: row[k] for k in keys} for row in rows]
+    if args.command == "train":
+        from .training import train
+
+        return train(args.epochs)
     raise ValueError(args.command)

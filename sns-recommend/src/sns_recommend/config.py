@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     model_timeout_seconds: float = 120
     embedding_model: str = "qwen3-embedding:0.6b"
     dimensions: int = 768
+    model_dir: str = "models"
 
 
 @lru_cache

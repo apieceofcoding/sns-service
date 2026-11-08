@@ -7,6 +7,8 @@ dependencies = [
     "psycopg[binary,pool]>=3.2,<4",
     "pydantic-settings>=2,<3",
     "httpx>=0.28,<1",
+    "numpy>=2,<3",
+    "torch>=2.6,<3",
 ]
 
 [dependency-groups]
@@ -15,6 +17,15 @@ dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
 [project.scripts]
 sns-recommend = "sns_recommend.cli:main"
 sns-recommend-event-worker = "sns_recommend.event_worker:main"
+
+# Linux (Docker) installs the CPU build of PyTorch; the default build pulls CUDA libraries.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
