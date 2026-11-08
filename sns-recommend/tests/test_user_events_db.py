@@ -8,13 +8,17 @@ from uuid import uuid4
 import pytest
 
 from sns_recommend import (
+    event_queue,
     event_worker,
     events,
+    generation,
     indexing,
     profiles,
+    ranking,
     simulator,
     source,
     source_demo,
+    training,
 )
 from sns_recommend.db import connection, initialize, source_connection
 from sns_recommend.embeddings import embedding_model
@@ -45,6 +49,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     seed()
+    monkeypatch.setattr(event_queue, "current_created_at", lambda user_id: None)
 
 
 def add_like(post_id: int = 1) -> int:
@@ -62,12 +67,14 @@ def test_like_is_copied_once_and_cancel_removes_it_from_the_vector() -> None:
     event_worker.poll_once()
     assert event_worker.sync_events() == 0
     assert [r["source_id"] for r in rows("like")] == [like_id]
+    assert len(rows("recommend.requested")) == 1
     assert profiles.build_user_vector(READER) is not None
 
     with source_connection() as conn:
         conn.execute("UPDATE likes SET deleted_at=now(),modified_at=now() WHERE id=%s", (like_id,))
     assert event_worker.sync_events() == 1
     assert rows("like")[0]["removed_at"] is not None
+    assert len(rows("recommend.requested")) == 1
     assert profiles.build_user_vector(READER) is None
 
 
@@ -89,7 +96,7 @@ def test_reply_and_repost_target_the_original_post() -> None:
     assert rows("repost")[0]["post_id"] == 3
 
 
-def test_impression_excludes_post_and_click_is_copied() -> None:
+def test_impression_excludes_post_and_click_requests_refresh() -> None:
     with source_connection() as conn:
         conn.execute(
             "INSERT INTO post_actions(event_id,user_id,post_id,action) VALUES (%s,%s,5,'impression')",
@@ -97,6 +104,7 @@ def test_impression_excludes_post_and_click_is_copied() -> None:
         )
     event_worker.sync_events()
     assert events.excluded_ids(READER) == {5}
+    assert rows("recommend.requested") == []
     with source_connection() as conn:
         conn.execute(
             "INSERT INTO post_actions(event_id,user_id,post_id,action) VALUES (%s,%s,6,'click')",
@@ -104,6 +112,18 @@ def test_impression_excludes_post_and_click_is_copied() -> None:
         )
     event_worker.sync_events()
     assert len(rows("click")) == 1
+    assert len(rows("recommend.requested")) == 1
+
+
+def test_recent_impression_schedules_missing_list_with_interval() -> None:
+    with source_connection() as conn:
+        conn.execute(
+            "INSERT INTO post_actions(event_id,user_id,post_id,action) VALUES (%s,%s,5,'impression')",
+            (uuid4(), READER),
+        )
+    event_worker.sync_events()
+    assert event_queue.schedule_active() == {"scheduled": 1}
+    assert event_queue.schedule_active() == {"scheduled": 0}
 
 
 def pending_index() -> list[int]:
@@ -181,6 +201,7 @@ def test_model_failure_keeps_the_index_cursor(monkeypatch: pytest.MonkeyPatch) -
     with pytest.raises(RuntimeError):
         indexing.index_changes()
     monkeypatch.undo()
+    monkeypatch.setattr(event_queue, "current_created_at", lambda user_id: None)
     assert pending_index()[:1] == [1]
 
 
@@ -228,3 +249,49 @@ def test_late_event_keeps_its_time_and_is_still_copied() -> None:
     event_worker.sync_events()
     [late] = rows("impression")
     assert late["occurred_at"] < datetime.now(UTC) - timedelta(hours=2)
+
+
+def test_waiting_request_merges_while_claimed_one_runs() -> None:
+    first = event_queue.enqueue(READER)
+    assert event_queue.enqueue(READER) == first
+    claimed = event_queue.claim()
+    assert claimed is not None and event_queue.claim() is None
+    assert event_queue.enqueue(READER) != first
+    assert event_queue.finish(claimed)
+
+
+def test_history_skips_cancelled_likes() -> None:
+    keep, cancel = add_like(1), add_like(2)
+    with source_connection() as conn:
+        conn.execute("UPDATE likes SET deleted_at=now(),modified_at=now() WHERE id=%s", (cancel,))
+    event_worker.poll_once()
+    assert keep and [h[0] for h in ranking.recent_history(READER)] == [1]
+
+
+def test_without_a_model_the_retrieval_order_is_published() -> None:
+    event_worker.drain()
+    add_like()
+    event_worker.sync_events()
+    result = generation.generate_for_user(READER)
+    assert result["published"] is True and result["strategy"] == "embedding"
+    assert rows("recommend.requested")[0]["processed_at"] is not None
+
+
+def test_request_queued_long_ago_is_still_published() -> None:
+    event_worker.drain()
+    event_queue.enqueue(READER)
+    with connection() as conn:
+        conn.execute(
+            "UPDATE user_events SET occurred_at=now()-interval '2 hours' "
+            "WHERE action='recommend.requested'"
+        )
+    assert generation.generate_for_user(READER)["published"] is True
+
+
+def test_trained_model_is_served(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(training.settings(), "model_dir", str(tmp_path))
+    simulator.simulate(users=40, sessions=6, hours=3)
+    event_worker.drain()
+    report = training.train(epochs=2)
+    served = generation.generate_for_user(READER)
+    assert served["strategy"] == "model" and served["model_version"] == report["trained_until"]

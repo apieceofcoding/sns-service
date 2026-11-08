@@ -53,6 +53,7 @@ management:
           endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces"
           transport: http
 recommend:
+  feed-base-url: "${RECOMMEND_FEED_BASE_URL:http://localhost:8001}"
   base-url: "${RECOMMEND_BASE_URL:http://localhost:8081}"
   connect-timeout: 200ms
   timeout: 200ms

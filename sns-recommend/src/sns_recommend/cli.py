@@ -19,8 +19,11 @@ def main():
     post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
     post.add_argument("--post", type=int, default=1001)
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
-    for name in ("profile", "candidates"):
+    for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
+    baseline = commands.add_parser("baseline")
+    baseline.add_argument("--user", type=int, default=7)
+    baseline.add_argument("--strategy", choices=["latest", "popular"], default="latest")
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
@@ -69,4 +72,12 @@ def run(args):
         from .training import train
 
         return train(args.epochs)
+    if args.command == "baseline":
+        from .baseline import baseline
+
+        return baseline(args.user, args.strategy)
+    if args.command == "generate":
+        from .generation import generate_for_user
+
+        return generate_for_user(args.user)
     raise ValueError(args.command)

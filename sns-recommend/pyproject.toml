@@ -5,8 +5,11 @@ description = "SNS recommend course API and worker"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "psycopg[binary,pool]>=3.2,<4",
+    "redis>=5,<7",
     "pydantic-settings>=2,<3",
     "httpx>=0.28,<1",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
     "numpy>=2,<3",
     "torch>=2.6,<3",
 ]
@@ -17,6 +20,7 @@ dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
 [project.scripts]
 sns-recommend = "sns_recommend.cli:main"
 sns-recommend-event-worker = "sns_recommend.event_worker:main"
+sns-recommend-worker = "sns_recommend.worker:main"
 
 # Linux (Docker) installs the CPU build of PyTorch; the default build pulls CUDA libraries.
 [tool.uv.sources]
