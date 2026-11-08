@@ -15,10 +15,11 @@ from sns_recommend import (
     indexing,
     profiles,
     ranking,
+    registry,
     simulator,
     source,
     source_demo,
-    training,
+    trainer,
 )
 from sns_recommend.db import connection, initialize, source_connection
 from sns_recommend.embeddings import embedding_model
@@ -288,10 +289,16 @@ def test_request_queued_long_ago_is_still_published() -> None:
     assert generation.generate_for_user(READER)["published"] is True
 
 
-def test_trained_model_is_served(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(training.settings(), "model_dir", str(tmp_path))
+def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
+    monkeypatch.setattr(trainer.settings(), "promote_margin", -1.0)
+    monkeypatch.setattr(trainer, "TOLERANCE", 1.0)
     simulator.simulate(users=40, sessions=6, hours=3)
     event_worker.drain()
-    report = training.train(epochs=2)
+    result = trainer.retrain(force=True, epochs=2)
+    assert result["promoted"] is True and registry.active()["id"] == result["version"]
     served = generation.generate_for_user(READER)
-    assert served["strategy"] == "model" and served["model_version"] == report["trained_until"]
+    assert served["strategy"] == "model" and served["model_version"] == result["version"]
+    second = trainer.retrain(force=True, epochs=2)
+    registry.promote(second["version"])
+    assert registry.rollback() == {"active": result["version"]}

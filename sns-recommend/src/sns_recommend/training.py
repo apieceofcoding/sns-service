@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import math
-import time
-from pathlib import Path
 
 import torch
 from torch import nn
 
-from .config import settings
-from .dataset import build_sessions, encode, load_events, post_features
-from .embeddings import embedding_model
-from .model import Ranker, save, score
+from .dataset import build_sessions, load_events, post_features
+from .model import Ranker, score
 
 
 def split(sessions: list[dict], valid_ratio: float = 0.25) -> tuple[list[dict], list[dict]]:
@@ -85,22 +81,3 @@ def prepare(until=None) -> tuple[list[dict], dict[int, dict]]:
     ids = {p for s in sessions for p in s["candidates"]}
     ids |= {h[0] for s in sessions for h in s["history"]}
     return sessions, post_features(ids)
-
-
-def train(epochs: int = 40, path: Path | None = None) -> dict:
-    """Train on earlier visits, compare on later ones, and save the model file."""
-    sessions, features = prepare()
-    train_sessions, valid_sessions = split(sessions)
-    if len(train_sessions) < 20 or not features:
-        raise ValueError("not enough sessions; run simulate and the event worker first")
-    started = time.perf_counter()
-    model = fit(encode(train_sessions, features), epochs)
-    report = {
-        "sessions": {"train": len(train_sessions), "valid": len(valid_sessions)},
-        "trained_until": train_sessions[-1]["start"].isoformat(),
-        "embedding_model": embedding_model(),
-        "seconds": round(time.perf_counter() - started, 1),
-        "ndcg@10": compare(encode(valid_sessions, features), {"model": model}),
-    }
-    save(model, path or Path(settings().model_dir) / "latest.pt", report)
-    return report

@@ -7,7 +7,7 @@ from .db import initialize, source_connection
 def main():
     parser = argparse.ArgumentParser(prog="sns-recommend")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "seed", "status", "index"):
+    for name in ("init", "seed", "status", "index", "models", "rollback"):
         commands.add_parser(name)
     simulate = commands.add_parser("simulate", help="synthetic readers see posts and react")
     simulate.add_argument("--users", type=int, default=300)
@@ -25,6 +25,8 @@ def main():
     baseline.add_argument("--user", type=int, default=7)
     baseline.add_argument("--strategy", choices=["latest", "popular"], default="latest")
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
+    commands.add_parser("promote").add_argument("--version", type=int, required=True)
+    commands.add_parser("monitor").add_argument("--hours", type=float, default=1)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
 
@@ -69,9 +71,9 @@ def run(args):
         keys = ("id", "author_id", "similarity", "sources")
         return [{k: row[k] for k in keys} for row in rows]
     if args.command == "train":
-        from .training import train
+        from .trainer import retrain
 
-        return train(args.epochs)
+        return retrain(force=True, epochs=args.epochs)
     if args.command == "baseline":
         from .baseline import baseline
 
@@ -80,4 +82,20 @@ def run(args):
         from .generation import generate_for_user
 
         return generate_for_user(args.user)
+    if args.command == "models":
+        from .registry import versions
+
+        return versions()
+    if args.command == "promote":
+        from .registry import promote
+
+        return promote(args.version)
+    if args.command == "rollback":
+        from .registry import rollback
+
+        return rollback()
+    if args.command == "monitor":
+        from .trainer import monitor
+
+        return monitor(args.hours)
     raise ValueError(args.command)

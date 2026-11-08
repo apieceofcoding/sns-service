@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     refresh_seconds: int = 300
     minimum_refresh_seconds: int = 60
     lease_seconds: int = 120
+    # A new model is promoted only if it beats the embedding ranking by this NDCG margin.
+    promote_margin: float = 0.01
+    retrain_min_sessions: int = 200
 
 
 @lru_cache

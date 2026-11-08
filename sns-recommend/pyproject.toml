@@ -21,6 +21,7 @@ dev = ["pytest>=8,<9", "ruff>=0.11,<1"]
 sns-recommend = "sns_recommend.cli:main"
 sns-recommend-event-worker = "sns_recommend.event_worker:main"
 sns-recommend-worker = "sns_recommend.worker:main"
+sns-recommend-trainer = "sns_recommend.trainer:main"
 
 # Linux (Docker) installs the CPU build of PyTorch; the default build pulls CUDA libraries.
 [tool.uv.sources]
