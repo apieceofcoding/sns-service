@@ -41,7 +41,7 @@ def candidates_from(monkeypatch):
         monkeypatch.setattr(retrieval.source, "user_exists", lambda _: True)
         monkeypatch.setattr(retrieval.source, "recent_posts", lambda *_: posts)
         monkeypatch.setattr(retrieval, "connection", connection)
-        monkeypatch.setattr(retrieval, "excluded_ids", lambda _: set())
+        monkeypatch.setattr(retrieval, "excluded_ids", lambda *_: set())
         monkeypatch.setattr(retrieval, "embedding_model", lambda: "test")
         vector = list(user_vector) if user_vector else None
         return retrieval.retrieve_candidates(7, k=k, as_of=NOW, user_vector=vector)
