@@ -1,18 +1,23 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from . import source
 from .db import connection
 from .embeddings import embedding_model, vector_sql
 from .events import excluded_ids
+from .profiles import build_user_vector
 
 
 def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
     """Candidate retrieval: semantic search plus latest and popular posts, at most k."""
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
-    reference = as_of or datetime.now(UTC)
+    return merge_candidates(candidate_pool(user_id, as_of or datetime.now(UTC), user_vector), k)
+
+
+def candidate_pool(user_id, reference, user_vector, seen_before=None):
+    """Recent posts the user has not seen, each with its similarity to the user vector."""
     posts = source.recent_posts(user_id, reference)
-    excluded = excluded_ids(user_id)
+    excluded = excluded_ids(user_id, seen_before)
     similar = []
     if user_vector is not None:
         with connection() as conn:
@@ -24,12 +29,53 @@ def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
             ).fetchall()
     # A vector made from an older body is ignored until the post is indexed again.
     similarity = {(r["post_id"], r["content_version"]): r["similarity"] for r in similar}
-    rows = [
+    return [
         {**p, "similarity": similarity.get((p["id"], p["version"]))}
         for p in posts
         if p["id"] not in excluded
     ]
-    return merge_candidates(rows, k)
+
+
+def candidate_recall(hours: float = 1, k: int = 30) -> dict:
+    """Recall@k: of the posts readers clicked or liked in the last `hours`, the share that
+    was already in the candidates built from what was known before that window.
+
+    Popular uses today's like counts, so it gets a small head start."""
+    as_of = datetime.now(UTC) - timedelta(hours=hours)
+    with connection() as conn:
+        reacted = conn.execute(
+            """SELECT user_id,array_agg(DISTINCT post_id) AS posts FROM user_events
+            WHERE action IN ('click','like') AND removed_at IS NULL AND occurred_at>=%s
+            GROUP BY user_id""",
+            (as_of,),
+        ).fetchall()
+    hits = dict.fromkeys(("candidates", "embedding", "latest", "popular", "random"), 0.0)
+    targets = 0
+    for row in reacted:
+        vector = build_user_vector(row["user_id"], before=as_of)
+        rows = candidate_pool(row["user_id"], as_of, vector, seen_before=as_of)
+        wanted = {r["id"] for r in rows} & set(row["posts"])
+        if not wanted:
+            continue
+        semantic = [r for r in rows if r["similarity"] is not None]
+        chosen = {
+            "candidates": merge_candidates(rows, k),
+            "embedding": sorted(semantic, key=lambda r: r["similarity"], reverse=True)[:k],
+            "latest": sorted(rows, key=lambda r: r["created_at"], reverse=True)[:k],
+            "popular": sorted(rows, key=lambda r: r["likes"], reverse=True)[:k],
+        }
+        for name, group in chosen.items():
+            hits[name] += len(wanted & {r["id"] for r in group})
+        hits["random"] += len(wanted) * min(k, len(rows)) / len(rows)
+        targets += len(wanted)
+    return {
+        "as_of": as_of,
+        "users": len(reacted),
+        "targets": targets,
+        f"recall@{k}": {
+            name: round(h / targets, 3) if targets else None for name, h in hits.items()
+        },
+    }
 
 
 def merge_candidates(rows, k=30):

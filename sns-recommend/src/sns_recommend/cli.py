@@ -21,6 +21,7 @@ def main():
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
+    commands.add_parser("recall").add_argument("--hours", type=float, default=1)
     baseline = commands.add_parser("baseline")
     baseline.add_argument("--user", type=int, default=7)
     baseline.add_argument("--strategy", choices=["latest", "popular"], default="latest")
@@ -70,6 +71,10 @@ def run(args):
         rows = retrieve_candidates(args.user, user_vector=build_user_vector(args.user))
         keys = ("id", "author_id", "similarity", "sources")
         return [{k: row[k] for k in keys} for row in rows]
+    if args.command == "recall":
+        from .retrieval import candidate_recall
+
+        return candidate_recall(args.hours)
     if args.command == "train":
         from .trainer import retrain
 

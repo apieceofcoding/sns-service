@@ -16,6 +16,7 @@ from sns_recommend import (
     profiles,
     ranking,
     registry,
+    retrieval,
     simulator,
     source,
     source_demo,
@@ -44,9 +45,7 @@ def rows(action: str, user_id: int = READER) -> list[dict]:
 def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
-        conn.execute(
-            "TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions,generation_runs"
-        )
+        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     seed()
@@ -237,6 +236,16 @@ def test_simulated_readers_become_events_once() -> None:
         ).fetchone()["n"]
     assert copied == shown
     assert event_worker.drain()["events"] == 0
+
+
+def test_candidate_recall_uses_only_what_was_known_before() -> None:
+    simulator.simulate(users=40, sessions=10, hours=3)
+    event_worker.drain()
+    report = retrieval.candidate_recall(hours=1)
+    recall = report["recall@30"]
+    assert report["targets"] > 0
+    assert all(0 <= value <= 1 for value in recall.values())
+    assert recall["candidates"] > recall["random"]
 
 
 def test_late_event_keeps_its_time_and_is_still_copied() -> None:
