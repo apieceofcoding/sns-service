@@ -21,6 +21,7 @@ def main():
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     for name in ("profile", "candidates"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
+    commands.add_parser("recall").add_argument("--hours", type=float, default=1)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
 
@@ -64,4 +65,8 @@ def run(args):
         rows = retrieve_candidates(args.user, user_vector=build_user_vector(args.user))
         keys = ("id", "author_id", "similarity", "sources")
         return [{k: row[k] for k in keys} for row in rows]
+    if args.command == "recall":
+        from .retrieval import candidate_recall
+
+        return candidate_recall(args.hours)
     raise ValueError(args.command)

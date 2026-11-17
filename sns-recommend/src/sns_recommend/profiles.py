@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from . import source
 from .db import connection
 from .embeddings import embedding_model, normalize
 
 
-def build_user_vector(user_id: int) -> list[float] | None:
-    """Average of up to 5 recently liked or clicked post vectors. Kept in memory only."""
+def build_user_vector(user_id: int, before: datetime | None = None) -> list[float] | None:
+    """Average of up to 5 post vectors the user reacted to before `before`. Memory only."""
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
+    reference = before or datetime.now(UTC)
     with connection() as conn:
         rows = conn.execute(
             """SELECT post_id FROM user_events WHERE user_id=%s
             AND action IN ('like','reply','repost','click') AND removed_at IS NULL
-            AND occurred_at>now()-interval '7 days' GROUP BY post_id
+            AND occurred_at>%s-interval '7 days' AND occurred_at<%s GROUP BY post_id
             ORDER BY max(occurred_at) DESC,post_id DESC LIMIT 20""",
-            (user_id,),
+            (user_id, reference, reference),
         ).fetchall()
         ids = [r["post_id"] for r in rows]
         rows = conn.execute(
