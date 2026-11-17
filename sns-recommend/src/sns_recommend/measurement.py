@@ -31,6 +31,7 @@ def metrics(minutes: int = 60) -> dict:
             """SELECT count(*) AS runs,
             percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
             count(*) FILTER (WHERE strategy='model') AS model,
+            count(*) FILTER (WHERE strategy='control') AS control,
             count(*) FILTER (WHERE strategy LIKE 'embedding%%') AS fallback,
             count(*) FILTER (WHERE error IS NOT NULL) AS errors
             FROM generation_runs WHERE created_at>now()-make_interval(mins=>%s)""",
@@ -39,4 +40,12 @@ def metrics(minutes: int = 60) -> dict:
         serving = conn.execute(
             "SELECT id,activated_at FROM model_versions WHERE status='active'"
         ).fetchone()
-    return {"window_minutes": minutes, "generation": runs, "active_model": serving}
+        experiment = conn.execute(
+            "SELECT name,started_at FROM experiments WHERE stopped_at IS NULL"
+        ).fetchone()
+    return {
+        "window_minutes": minutes,
+        "generation": runs,
+        "active_model": serving,
+        "experiment": experiment,
+    }

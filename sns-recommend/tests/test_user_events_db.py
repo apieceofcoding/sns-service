@@ -11,6 +11,7 @@ from sns_recommend import (
     event_queue,
     event_worker,
     events,
+    experiment,
     generation,
     indexing,
     profiles,
@@ -45,7 +46,10 @@ def rows(action: str, user_id: int = READER) -> list[dict]:
 def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
-        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions")
+        conn.execute(
+            "TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions,"
+            "generation_runs,experiments"
+        )
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     seed()
@@ -311,3 +315,27 @@ def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) 
     second = trainer.retrain(force=True, epochs=2)
     registry.promote(second["version"])
     assert registry.rollback() == {"active": result["version"]}
+
+
+def test_experiment_serves_each_group_its_ranking_and_counts_clicks(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
+    monkeypatch.setattr(trainer.settings(), "promote_margin", -1.0)
+    monkeypatch.setattr(trainer, "TOLERANCE", 1.0)
+    simulator.simulate(users=20, sessions=6, hours=3)
+    event_worker.drain()
+    trainer.retrain(force=True, epochs=2)
+    experiment.start("ab-test")
+    with pytest.raises(ValueError, match="running"):
+        experiment.start("ab-other")
+    result = experiment.simulate_feed(rounds=1, users=20)
+    assert result["impressions"] > 0
+    assert {a["readers"] > 0 for a in result["arms"].values()} == {True}
+    with connection() as conn:
+        served = conn.execute("SELECT user_id,strategy FROM generation_runs").fetchall()
+    assert {r["strategy"] for r in served} == {"control", "model"}
+    assert all(
+        (r["strategy"] == "control") == (experiment.arm(r["user_id"], "ab-test") == "control")
+        for r in served
+    )
+    experiment.stop()
+    assert generation.generate_for_user(READER)["strategy"] == "model"

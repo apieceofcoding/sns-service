@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from .db import connection
 from .event_queue import allocate_generation, claim, enqueue, finish, heartbeat
+from .experiment import assigned
 from .feed import publish
 from .measurement import record_generation
 from .profiles import build_user_vector
@@ -30,7 +31,10 @@ def run(event: dict) -> dict:
     generation = allocate_generation()
     created_at = datetime.now(UTC).timestamp()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
-    ranked = rank(user_id, candidates)
+    if assigned(user_id) == "control":
+        ranked = {"ids": [c["id"] for c in candidates], "scores": None, "strategy": "control"}
+    else:
+        ranked = rank(user_id, candidates)
     ids = diversify(candidates, ranked["ids"])
     published = publish_if_owner(event, ids, ranked, generation, created_at)
     if not finish(event):

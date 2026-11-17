@@ -28,6 +28,12 @@ def main():
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     commands.add_parser("promote").add_argument("--version", type=int, required=True)
     commands.add_parser("monitor").add_argument("--hours", type=float, default=1)
+    experiment = commands.add_parser("experiment", help="A/B test: embedding order vs model")
+    experiment.add_argument("action", choices=["start", "run", "report", "stop"])
+    experiment.add_argument("--name", default="ab-1")
+    experiment.add_argument("--rounds", type=int, default=3)
+    experiment.add_argument("--users", type=int, default=300)
+    experiment.add_argument("--shift", action="store_true")
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
 
@@ -103,6 +109,16 @@ def run(args):
         from .trainer import monitor
 
         return monitor(args.hours)
+    if args.command == "experiment":
+        from . import experiment
+
+        if args.action == "start":
+            return experiment.start(args.name)
+        if args.action == "run":
+            return experiment.simulate_feed(args.rounds, args.users, args.shift)
+        if args.action == "stop":
+            return experiment.stop()
+        return experiment.report()
     from .benchmark import benchmark
 
     return benchmark(args.user)
