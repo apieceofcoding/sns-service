@@ -1,6 +1,6 @@
 # SNS 추천 서비스 실습
 
-우리 서비스의 행동 데이터로 순위 모델을 학습하고, 추천을 생성해 Redis에 저장한 뒤 FastAPI로 조회합니다. 새 데이터가 쌓이면 다시 학습하고 나아질 때만 교체해요. **part-1부터 part-6까지 순서대로 진행해요.** 모델 API 키와 GPU는 필요 없습니다.
+백엔드 개발자를 위한 추천 시스템 실습입니다. 우리 서비스의 행동 데이터로 순위 모델을 학습하고, 추천을 생성해 Redis에 저장한 뒤 FastAPI로 조회합니다. 새 데이터가 쌓이면 다시 학습하고 나아질 때만 교체하며, A/B 실험으로 실제 피드가 나아졌는지 확인해요. **part-1부터 part-6까지 순서대로 진행해요.** 모델 API 키와 GPU는 필요 없습니다.
 
 | 폴더 | 역할 |
 |---|---|
@@ -168,6 +168,13 @@ uv run sns-recommend candidates --user 7
 
 사용자 벡터는 최근 반응한 글 벡터 최대 5개의 평균이며 메모리에만 둡니다. 후보는 최근 48시간 글에서 본인 글, 삭제 글, 이미 본 글을 빼고 고릅니다. `sources`로 후보가 들어온 경로를 확인해요. 후보에서 빠진 글은 다음 단계가 되살릴 수 없습니다.
 
+```sh
+# 후보 수집 평가: 최근 1시간에 반응한 글이 그 전에 만든 후보 30개 안에 있었나
+uv run sns-recommend recall
+```
+
+`recall@30`은 최근 1시간 동안 클릭하거나 좋아요한 글 중, 그 시점 전의 정보로 만든 후보에 이미 들어 있던 비율입니다. `random`은 무작위 30개를 골랐을 때의 기댓값이에요. 최신순과 인기순을 섞으면 의미 검색만 쓸 때보다 재현율이 조금 낮아지지만, 새 글과 인기 글도 노출할 기회를 얻습니다.
+
 별도 터미널에서 `uv run sns-recommend-event-worker`를 켜 두면 이후 변경도 계속 반영해요.
 
 ### part-3. 순위 모델 학습
@@ -260,7 +267,7 @@ uv run sns-recommend rollback
 uv run sns-recommend-trainer
 ```
 
-### part-6. 운영과 실패 대체
+### part-6. A/B 실험과 운영
 
 ```sh
 git switch part-6-operations
@@ -272,7 +279,18 @@ uv run sns-recommend benchmark --user 7
 curl -fsS http://localhost:8001/metrics
 ```
 
-`benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델과 대체 순위의 비율, 서비스 중인 모델 버전을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
+`benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델과 대체 순위의 비율, 서비스 중인 모델 버전과 진행 중인 실험을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
+
+```sh
+# A/B 실험: 독자를 반으로 나눠 대조군은 임베딩 순, 실험군은 모델 순으로 피드 제공
+uv run sns-recommend experiment start --name ab-1
+# 독자들이 실제로 발행된 피드를 열어 위쪽 10개를 보고 반응. 3번 반복
+uv run sns-recommend experiment run --rounds 3
+uv run sns-recommend experiment report
+uv run sns-recommend experiment stop
+```
+
+오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줍니다. 실험은 우리가 **실제로 보여 준 피드**에 독자가 얼마나 반응했는지를 그룹별로 비교해요. `p_value`가 0.05보다 작으면 차이가 우연일 가능성이 낮다고 봅니다. 실험 중 노출은 추천이 고른 글이라 이후 학습 데이터에 노출 편향이 생겨요.
 
 | 장애 | 동작 |
 |---|---|
