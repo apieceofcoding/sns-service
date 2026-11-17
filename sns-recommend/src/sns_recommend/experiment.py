@@ -86,7 +86,8 @@ def simulate_feed(rounds: int = 3, users: int = 300, shift: bool = False) -> dic
                 user_id, simulator.SHOWN, excluded=excluded_ids(user_id), alive=source.alive_ids
             )["post_ids"]
             moods[user_id] = simulator.drift(rnd, tastes[user_id], moods[user_id])
-            # Reactions land a few seconds later; keep them in the past, inside the experiment.
+            # Backdate so reactions (up to 20 seconds later) are not in the future,
+            # but never before the experiment started.
             at = max(current["started_at"], datetime.now(UTC) - timedelta(seconds=30))
             feed = [posts[i] for i in ids if i in posts]
             simulator.visit(rnd, user_id, feed, at, tastes[user_id], moods[user_id], rows)
