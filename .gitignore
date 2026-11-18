@@ -3,6 +3,8 @@
 .env.*
 !.env.example
 !.env.sample
+# Session cookies saved by the curl examples in README
+cookies.txt
 # Editors and generated files
 .DS_Store
 .idea/
