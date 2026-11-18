@@ -72,14 +72,6 @@ def recent_posts(user_id, reference, hours=48):
         ).fetchall()
 
 
-def post_bodies(post_ids):
-    with source_connection() as conn:
-        rows = conn.execute(
-            "SELECT id,content FROM posts WHERE id=ANY(%s) AND deleted_at IS NULL", (post_ids,)
-        ).fetchall()
-    return {row["id"]: row["content"] for row in rows}
-
-
 def created_times(post_ids):
     """Version and creation time of visible posts, for model features."""
     with source_connection() as conn:
