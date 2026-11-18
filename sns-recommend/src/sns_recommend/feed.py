@@ -33,7 +33,15 @@ def redis_client():
 
 
 def publish(
-    user_id, ids, strategy, generation, snapshot_id=None, created_at=None, model_version=None
+    user_id,
+    ids,
+    strategy,
+    generation,
+    snapshot_id=None,
+    created_at=None,
+    model_version=None,
+    experiment=None,
+    arm=None,
 ):
     snapshot_id = snapshot_id or uuid4().hex
     payload = {
@@ -42,6 +50,8 @@ def publish(
         "ids": ids,
         "strategy": strategy,
         "model_version": model_version,
+        "experiment": experiment,
+        "arm": arm,
         "generation": generation,
         "created_at": created_at or time.time(),
     }
@@ -100,7 +110,7 @@ def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
     data = json.loads(raw)
     excluded = excluded or set()
     ids = data["ids"]
-    selected, end = [], min(len(ids), offset + limit * 5)
+    selected, positions, end = [], [], min(len(ids), offset + limit * 5)
     if alive is not None:
         window = ids[offset:end]
         excluded = excluded | (set(window) - alive(window))
@@ -109,13 +119,17 @@ def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
         offset += 1
         if post_id not in excluded:
             selected.append(post_id)
+            positions.append(offset - 1)
     more = offset < len(ids)
     return {
         "ready": True,
         "post_ids": selected,
+        "positions": positions,
         "snapshot_id": data["snapshot_id"],
         "strategy": data["strategy"],
         "model_version": data.get("model_version"),
+        "experiment": data.get("experiment"),
+        "arm": data.get("arm"),
         "created_at": data["created_at"],
         "stale": time.time() - data["created_at"] >= settings().refresh_seconds,
         "next_cursor": cursor_encode(user_id, data["snapshot_id"], offset) if more else None,

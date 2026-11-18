@@ -1,14 +1,14 @@
-"""A/B test: half the readers get the embedding order (control), half the model (treatment).
+"""A/B test: readers are split in two, and a new ranking is promoted only if its group does better.
 
-Offline NDCG says which ranking orders past impressions better. Only readers reacting to the
+Offline NDCG says which model orders past impressions better. Only readers reacting to the
 feed we actually served can say whether the feed got better.
 """
 
 from __future__ import annotations
 
 import hashlib
-import math
-from datetime import UTC, datetime, timedelta
+from collections import Counter
+from datetime import UTC, datetime
 from random import Random
 
 from . import simulator, source
@@ -16,9 +16,12 @@ from .db import connection
 from .event_worker import drain
 from .events import excluded_ids
 from .feed import read_feed
-from .registry import active
+from .measurement import record_served
+from .registry import active, newest_candidate, promote, reject, version_row
 
 ARMS = ("control", "treatment")
+NEW_POSTS = 12  # Authors keep posting while readers visit.
+LIKE_TOLERANCE = 0.95  # Guardrail: the like rate may not fall below this share of control's.
 
 
 def arm(user_id: int, name: str) -> str:
@@ -29,119 +32,204 @@ def arm(user_id: int, name: str) -> str:
 
 def running() -> dict | None:
     with connection() as conn:
-        return conn.execute(
-            "SELECT name,started_at FROM experiments WHERE stopped_at IS NULL"
-        ).fetchone()
+        return conn.execute("SELECT * FROM experiments WHERE stopped_at IS NULL").fetchone()
 
 
-def assigned(user_id: int) -> str | None:
-    current = running()
-    return arm(user_id, current["name"]) if current else None
-
-
-def start(name: str) -> dict:
-    if running():
-        raise ValueError("another experiment is running")
-    if active() is None:
-        raise LookupError("promote a model first; without one both groups get the same order")
-    with connection() as conn:
-        return conn.execute(
-            "INSERT INTO experiments(name) VALUES (%s) RETURNING name,started_at", (name,)
-        ).fetchone()
-
-
-def stop() -> dict:
-    with connection() as conn:
-        row = conn.execute(
-            """UPDATE experiments SET stopped_at=now() WHERE stopped_at IS NULL
-            RETURNING name,started_at,stopped_at"""
-        ).fetchone()
-    if row is None:
-        raise LookupError("no running experiment")
-    return row
-
-
-def simulate_feed(rounds: int = 3, users: int = 300, shift: bool = False) -> dict:
-    """Each round every reader opens the feed we published, sees the top posts and reacts."""
-    from .generation import generate_for_user  # generation asks this module for the group
-
+def assigned(user_id: int) -> dict | None:
+    """The ranking this reader's group gets, or None when no experiment is running."""
     current = running()
     if current is None:
+        return None
+    group = arm(user_id, current["name"])
+    treated = group == "treatment"
+    return {
+        "experiment": current["name"],
+        "arm": group,
+        "model": current["treatment_model" if treated else "control_model"],
+        "spread": current["treatment_spread"] if treated else True,
+    }
+
+
+def start(name: str, spread: bool = True, min_impressions: int = 3000) -> dict:
+    """Control serves the active model. Treatment serves the newest candidate, or, with
+    `spread` off, the same model without author spreading.
+
+    `min_impressions` per group is fixed before the first result, so nobody stops on a lucky peek.
+    """
+    if running():
+        raise ValueError("another experiment is running")
+    serving, candidate = active(), newest_candidate()
+    control = serving["id"] if serving else None
+    treatment = candidate["id"] if candidate and spread else control
+    if treatment == control and spread:
+        raise ValueError("nothing to compare: train a candidate first")
+    with connection() as conn:
+        return conn.execute(
+            """INSERT INTO experiments(name,control_model,treatment_model,treatment_spread,
+            min_impressions) VALUES (%s,%s,%s,%s,%s) RETURNING *""",
+            (name, control, treatment, spread, min_impressions),
+        ).fetchone()
+
+
+def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
+    """Each round authors post, then every reader opens the published feed and reacts."""
+    from .generation import generate_for_user  # generation asks this module for the group
+
+    if running() is None:
         raise LookupError("start an experiment first")
     rnd = Random(f"feed:{datetime.now(UTC):%Y%m%d%H%M}")
     reader_ids = simulator.readers(users)
-    tastes = {u: simulator.taste(u, shift) for u in reader_ids}
+    hourly_cost = simulator.age_cost()
+    tastes = {u: simulator.taste(u) for u in reader_ids}
     moods = {u: max(t, key=t.get) for u, t in tastes.items()}
-    posts = {p["id"]: p for p in simulator.visible_posts()}
-    shown = 0
     for _ in range(rounds):
-        drain()  # Earlier reactions become history and the seen set before the next feed.
+        simulator.publish_posts(NEW_POSTS)
+        drain()  # New posts get vectors; earlier reactions become history and the seen set.
+        posts = {p["id"]: p for p in simulator.visible_posts()}
         rows: tuple[list, list, list] = ([], [], [])
         for user_id in reader_ids:
             try:
                 generate_for_user(user_id)
             except (LookupError, RuntimeError):
                 continue  # Unknown reader, or a running worker already owns the request.
-            ids = read_feed(
+            feed = read_feed(
                 user_id, simulator.SHOWN, excluded=excluded_ids(user_id), alive=source.alive_ids
-            )["post_ids"]
+            )
+            record_served(user_id, feed)
             moods[user_id] = simulator.drift(rnd, tastes[user_id], moods[user_id])
-            # Backdate so reactions (up to 20 seconds later) are not in the future,
-            # but never before the experiment started.
-            at = max(current["started_at"], datetime.now(UTC) - timedelta(seconds=30))
-            feed = [posts[i] for i in ids if i in posts]
-            simulator.visit(rnd, user_id, feed, at, tastes[user_id], moods[user_id], rows)
+            shown = [posts[i] for i in feed["post_ids"] if i in posts]
+            simulator.visit(
+                rnd,
+                user_id,
+                shown,
+                datetime.now(UTC),
+                tastes[user_id],
+                moods[user_id],
+                hourly_cost,
+                rows,
+            )
         simulator.write(*rows)
-        shown += len(rows[0])
     drain()
-    return {"rounds": rounds, "impressions": shown, **report()}
+    return {"rounds": rounds, **report()}
 
 
-def compare_rates(clicks_a: int, shown_a: int, clicks_b: int, shown_b: int) -> dict:
-    """Two-proportion z-test. A small p-value means the gap is unlikely to be luck."""
-    if not shown_a or not shown_b:
+def compare_readers(control: list[tuple[int, int]], treatment: list[tuple[int, int]]) -> dict:
+    """Permutation test with the reader as the unit, because readers were what we split.
+
+    Each item is one reader's (clicks, impressions). Shuffling the group labels between readers
+    shows how often chance alone gives a gap this large. Counting impressions as independent
+    would overstate the evidence: one reader's impressions resemble each other.
+    """
+
+    def gap(groups: list[int]) -> float:
+        clicks, shown = [0, 0], [0, 0]
+        for (c, n), g in zip(readers, groups, strict=True):
+            clicks[g] += c
+            shown[g] += n
+        return clicks[1] / shown[1] - clicks[0] / shown[0] if shown[0] and shown[1] else 0.0
+
+    readers = control + treatment
+    labels = [0] * len(control) + [1] * len(treatment)
+    shown = [sum(n for _, n in group) for group in (control, treatment)]
+    if not all(shown):
         return {"lift": None, "p_value": None}
-    rate_a, rate_b = clicks_a / shown_a, clicks_b / shown_b
-    pooled = (clicks_a + clicks_b) / (shown_a + shown_b)
-    spread = math.sqrt(pooled * (1 - pooled) * (1 / shown_a + 1 / shown_b))
-    p_value = math.erfc(abs(rate_b - rate_a) / spread / math.sqrt(2)) if spread else 1.0
-    lift = round(rate_b / rate_a - 1, 3) if rate_a else None
-    return {"lift": lift, "p_value": round(p_value, 4)}
+    observed = gap(labels)
+    rnd, trials, extreme = Random(0), 2000, 0
+    for _ in range(trials):
+        rnd.shuffle(labels)
+        extreme += abs(gap(labels)) >= abs(observed)
+    base = sum(c for c, _ in control) / shown[0]
+    return {
+        "lift": round(observed / base, 3) if base else None,
+        # Counting the observed split as one of the shuffles keeps the estimate above zero.
+        "p_value": round((extreme + 1) / (trials + 1), 4),
+    }
 
 
 def report(name: str | None = None) -> dict:
-    """Click and like rates per group, counted from events inside the experiment window."""
+    """Per group: reactions to the posts that group was actually served, counted per reader."""
     with connection() as conn:
         exp = conn.execute(
-            """SELECT name,started_at,stopped_at FROM experiments
-            WHERE %s::text IS NULL OR name=%s ORDER BY started_at DESC LIMIT 1""",
+            """SELECT * FROM experiments WHERE %s::text IS NULL OR name=%s
+            ORDER BY started_at DESC LIMIT 1""",
             (name, name),
         ).fetchone()
         if exp is None:
             raise LookupError("no experiment")
         rows = conn.execute(
-            """SELECT user_id,action,count(*) AS n FROM user_events
-            WHERE action IN ('impression','click','like') AND removed_at IS NULL
-            AND occurred_at>=%s AND (%s::timestamptz IS NULL OR occurred_at<%s)
-            GROUP BY user_id,action""",
-            (exp["started_at"], exp["stopped_at"], exp["stopped_at"]),
+            """SELECT s.arm,s.user_id,count(*) FILTER (WHERE e.action='impression') AS shown,
+            count(*) FILTER (WHERE e.action='click') AS clicks,
+            count(*) FILTER (WHERE e.action='like') AS likes
+            FROM served_posts s JOIN user_events e ON e.user_id=s.user_id AND e.post_id=s.post_id
+            AND e.action IN ('impression','click','like') AND e.removed_at IS NULL
+            WHERE s.experiment=%s GROUP BY s.arm,s.user_id""",
+            (exp["name"],),
         ).fetchall()
-    groups = {a: {"readers": set(), "impression": 0, "click": 0, "like": 0} for a in ARMS}
-    for row in rows:
-        group = groups[arm(row["user_id"], exp["name"])]
-        group["readers"].add(row["user_id"])
-        group[row["action"]] += row["n"]
-    arms = {
-        a: {
-            "readers": len(g["readers"]),
-            "impressions": g["impression"],
-            "click_rate": round(g["click"] / g["impression"], 4) if g["impression"] else None,
-            "like_rate": round(g["like"] / g["impression"], 4) if g["impression"] else None,
+        served = conn.execute(
+            """SELECT arm,snapshot_id,array_agg(post_id) AS posts FROM served_posts
+            WHERE experiment=%s GROUP BY arm,snapshot_id""",
+            (exp["name"],),
+        ).fetchall()
+    authors = source.authors({post for row in served for post in row["posts"]})
+    arms = {}
+    readers = {}
+    for group in ARMS:
+        mine = [r for r in rows if r["arm"] == group and r["shown"]]
+        shown = sum(r["shown"] for r in mine)
+        shares = [
+            Counter(authors.get(p) for p in row["posts"]).most_common(1)[0][1] / len(row["posts"])
+            for row in served
+            if row["arm"] == group
+        ]
+        readers[group] = [(r["clicks"], r["shown"]) for r in mine]
+        arms[group] = {
+            "model": exp[f"{group}_model"],
+            "readers": len(mine),
+            "impressions": shown,
+            "click_rate": round(sum(r["clicks"] for r in mine) / shown, 4) if shown else None,
+            "like_rate": round(sum(r["likes"] for r in mine) / shown, 4) if shown else None,
+            "one_author_share": round(sum(shares) / len(shares), 3) if shares else None,
         }
-        for a, g in groups.items()
+    clicks = compare_readers(readers["control"], readers["treatment"])
+    ready = all(a["impressions"] >= exp["min_impressions"] for a in arms.values())
+    return {
+        "experiment": exp["name"],
+        "treatment_spread": exp["treatment_spread"],
+        "arms": arms,
+        "click_rate": clicks,
+        "ready": ready,
+        "verdict": exp["decision"] or verdict(arms, clicks, ready),
     }
-    control, treatment = groups["control"], groups["treatment"]
-    clicks = compare_rates(
-        control["click"], control["impression"], treatment["click"], treatment["impression"]
-    )
-    return {"experiment": exp["name"], "arms": arms, "click_rate": clicks}
+
+
+def verdict(arms: dict, clicks: dict, ready: bool) -> str:
+    if not ready or clicks["p_value"] is None:
+        return "wait: planned impressions not reached"
+    if clicks["p_value"] >= 0.05:
+        return "no clear difference"
+    if clicks["lift"] < 0:
+        return "control wins"
+    if arms["treatment"]["like_rate"] < arms["control"]["like_rate"] * LIKE_TOLERANCE:
+        return "control wins: treatment lowers the like rate"
+    return "treatment wins"
+
+
+def stop() -> dict:
+    """End the experiment and act on the result: a winning candidate model starts serving."""
+    current = running()
+    if current is None:
+        raise LookupError("no running experiment")
+    result = report(current["name"])
+    decision = result["verdict"].replace("wait", "inconclusive")
+    candidate = version_row(current["treatment_model"]) if current["treatment_model"] else None
+    if candidate and candidate["status"] == "candidate" and not decision.startswith("inconclusive"):
+        if decision == "treatment wins":
+            promote(candidate["id"])
+        else:
+            reject(candidate["id"])
+    with connection() as conn:
+        conn.execute(
+            "UPDATE experiments SET stopped_at=now(),decision=%s WHERE name=%s",
+            (decision, current["name"]),
+        )
+    return {**result, "verdict": decision, "active_model": (active() or {}).get("id")}

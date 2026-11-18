@@ -1,4 +1,4 @@
-"""Continuous training: retrain on new data, check the result, and promote only if it is better."""
+"""Continuous training: retrain on new data, check it offline, then let an experiment decide."""
 
 from __future__ import annotations
 
@@ -9,11 +9,12 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from . import experiment
 from .config import settings
 from .dataset import encode
 from .embeddings import embedding_model
 from .model import load, save
-from .registry import active, promote, register
+from .registry import active, newest_candidate, promote, register
 from .training import compare, fit, prepare, split
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,12 @@ def gate(ndcg: dict) -> tuple[bool, str]:
 
 
 def retrain(force: bool = False, epochs: int = 40) -> dict:
+    if experiment.running():
+        # A new candidate would replace the one being tested.
+        return {"trained": False, "reason": "an experiment is running; stop it first"}
     serving = active()
     sessions, features = prepare()
+    sessions = sessions[-settings().train_sessions :]
     if serving and not force:
         new = sum(s["start"] > serving["trained_until"] for s in sessions)
         if new < settings().retrain_min_sessions:
@@ -57,9 +62,27 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
     path = Path(settings().model_dir) / f"ranker-{datetime.now(UTC):%Y%m%d%H%M%S}.pt"
     save(model, path, report)
     version = register(str(path), report, "candidate" if accepted else "rejected")
-    if accepted:
+    # The first model has no serving model to be tested against. Later ones need an experiment.
+    promoted = accepted and serving is None
+    if promoted:
         promote(version)
-    return {"trained": True, "version": version, "promoted": accepted, "reason": reason, **report}
+    elif accepted:
+        reason = "passed the offline check; an experiment decides"
+    return {"trained": True, "version": version, "promoted": promoted, "reason": reason, **report}
+
+
+def step() -> dict:
+    """One pass of the pipeline: finish a ready experiment, or retrain and test the candidate."""
+    current = experiment.running()
+    if current:
+        ready = experiment.report(current["name"])["ready"]
+        return experiment.stop() if ready else {"experiment": current["name"], "ready": False}
+    result = retrain()
+    candidate = newest_candidate()
+    if candidate:
+        started = experiment.start(f"model-{candidate['id']}-{datetime.now(UTC):%m%d%H%M}")
+        result["experiment"] = started["name"]
+    return result
 
 
 def monitor(hours: float = 1) -> dict:
@@ -69,7 +92,7 @@ def monitor(hours: float = 1) -> dict:
         raise LookupError("no active model")
     sessions, features = prepare()
     since = datetime.now(UTC) - timedelta(hours=hours)
-    recent = [s for s in sessions if s["start"] >= since]
+    recent = [s for s in sessions if s["start"] >= since and not s["ranked"]]
     if not recent:
         return {"version": serving["id"], "recent_sessions": 0}
     model = load(Path(serving["path"]))[0]
@@ -83,14 +106,13 @@ def monitor(hours: float = 1) -> dict:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="Retrain the ranker when enough new data arrives")
+    parser = argparse.ArgumentParser(description="Retrain, test the candidate, promote the winner")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval", type=int, default=600, help="seconds between checks")
     args = parser.parse_args()
     while True:
         try:
-            result = retrain()
-            logger.info(json.dumps(result, default=str))
+            logger.info(json.dumps(step(), default=str))
         except Exception as exc:
             logger.warning("Training failed: %s", exc)
         if args.once:

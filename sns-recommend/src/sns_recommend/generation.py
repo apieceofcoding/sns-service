@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import random
 import time
 from datetime import UTC, datetime
 
+from .config import settings
 from .db import connection
 from .event_queue import allocate_generation, claim, enqueue, finish, heartbeat
 from .experiment import assigned
@@ -31,21 +33,34 @@ def run(event: dict) -> dict:
     generation = allocate_generation()
     created_at = datetime.now(UTC).timestamp()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
-    if assigned(user_id) == "control":
-        ranked = {"ids": [c["id"] for c in candidates], "scores": None, "strategy": "control"}
-    else:
-        ranked = rank(user_id, candidates)
-    ids = diversify(candidates, ranked["ids"])
-    published = publish_if_owner(event, ids, ranked, generation, created_at)
+    ranked = order(user_id, candidates)
+    published = publish_if_owner(event, ranked["ids"], ranked, generation, created_at)
     if not finish(event):
         raise RuntimeError("event lease lost")
     return {
         "user_id": user_id,
         "strategy": ranked["strategy"],
         "model_version": ranked.get("model_version"),
-        "post_ids": ids,
+        "arm": ranked.get("arm"),
+        "post_ids": ranked["ids"],
         "published": published,
     }
+
+
+def order(user_id: int, candidates: list[dict]) -> dict:
+    """This feed's order: a shuffled explore feed, the reader's experiment group, or the default."""
+    retrieval_order = [c["id"] for c in candidates]
+    if random.random() < settings().explore_rate:
+        # Readers react to posts no ranking chose, which keeps evaluation data unbiased.
+        return {"ids": random.sample(retrieval_order, len(retrieval_order)), "strategy": "explore"}
+    group = assigned(user_id) or {"model": None, "spread": True}
+    if "arm" in group and group["model"] is None:
+        ranked = {"ids": retrieval_order, "strategy": "embedding"}
+    else:
+        ranked = rank(user_id, candidates, group["model"])
+    if group["spread"]:
+        ranked["ids"] = diversify(candidates, ranked["ids"])
+    return {**ranked, "experiment": group.get("experiment"), "arm": group.get("arm")}
 
 
 def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
@@ -70,6 +85,8 @@ def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
             str(event["id"]),
             created_at,
             ranked.get("model_version"),
+            ranked.get("experiment"),
+            ranked.get("arm"),
         )
 
 

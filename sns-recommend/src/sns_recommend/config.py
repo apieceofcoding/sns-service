@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # A new model is promoted only if it beats the embedding ranking by this NDCG margin.
     promote_margin: float = 0.01
     retrain_min_sessions: int = 200
+    # Retraining reads only the latest visits, so the model follows how readers react now.
+    train_sessions: int = 2400
+    # Share of feeds shown in random order, so some reactions are free of ranking bias.
+    explore_rate: float = 0.1
 
 
 @lru_cache

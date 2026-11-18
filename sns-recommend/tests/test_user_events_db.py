@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from sns_recommend import (
+    dataset,
     event_queue,
     event_worker,
     events,
@@ -18,6 +19,7 @@ from sns_recommend import (
     ranking,
     registry,
     retrieval,
+    seed,
     simulator,
     source,
     source_demo,
@@ -25,13 +27,13 @@ from sns_recommend import (
 )
 from sns_recommend.db import connection, initialize, source_connection
 from sns_recommend.embeddings import embedding_model
-from sns_recommend.seed import seed
 from sns_recommend.sync_cursor import load_position
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("SNS_TEST_DISPOSABLE_DB"), reason="needs disposable databases"
 )
 READER = 7
+POSTS = 240  # A fifth of the course data keeps these tests quick.
 
 
 def rows(action: str, user_id: int = READER) -> list[dict]:
@@ -47,13 +49,15 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
         conn.execute(
-            "TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions,"
-            "generation_runs,experiments"
+            "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,model_versions,"
+            "generation_runs,experiments,served_posts"
         )
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
-    seed()
+    monkeypatch.setattr(seed, "POSTS", POSTS)
+    seed.seed()
     monkeypatch.setattr(event_queue, "current_created_at", lambda user_id: None)
+    monkeypatch.setattr(generation.settings(), "explore_rate", 0.0)
 
 
 def add_like(post_id: int = 1) -> int:
@@ -221,7 +225,7 @@ def test_new_embedding_space_indexes_every_post_again(monkeypatch: pytest.Monkey
     with connection() as conn:
         before = conn.execute("SELECT count(*) AS n FROM post_embeddings").fetchone()["n"]
     monkeypatch.setattr(indexing, "embedding_model", lambda: "other-model")
-    assert before == 240
+    assert before == POSTS
     assert indexing.index_changes()["indexed"] > 0
 
 
@@ -302,40 +306,72 @@ def test_request_queued_long_ago_is_still_published() -> None:
     assert generation.generate_for_user(READER)["published"] is True
 
 
-def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) -> None:
+def trained(tmp_path, monkeypatch, users: int = 40) -> dict:
+    """Simulated reactions and a first model, with the offline gate opened for tiny data."""
     monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
     monkeypatch.setattr(trainer.settings(), "promote_margin", -1.0)
     monkeypatch.setattr(trainer, "TOLERANCE", 1.0)
-    simulator.simulate(users=40, sessions=6, hours=3)
+    simulator.simulate(users=users, sessions=6, hours=3)
     event_worker.drain()
-    result = trainer.retrain(force=True, epochs=2)
-    assert result["promoted"] is True and registry.active()["id"] == result["version"]
+    return trainer.retrain(force=True, epochs=2)
+
+
+def test_first_model_serves_and_later_ones_wait_for_an_experiment(tmp_path, monkeypatch) -> None:
+    first = trained(tmp_path, monkeypatch)
+    assert first["promoted"] is True and registry.active()["id"] == first["version"]
     served = generation.generate_for_user(READER)
-    assert served["strategy"] == "model" and served["model_version"] == result["version"]
+    assert served["strategy"] == "model" and served["model_version"] == first["version"]
     second = trainer.retrain(force=True, epochs=2)
-    registry.promote(second["version"])
-    assert registry.rollback() == {"active": result["version"]}
+    third = trainer.retrain(force=True, epochs=2)
+    assert second["promoted"] is False
+    assert registry.newest_candidate()["id"] == third["version"]
+    assert registry.version_row(second["version"])["status"] == "rejected"
+    registry.promote(third["version"])
+    assert registry.rollback() == {"active": first["version"]}
 
 
-def test_experiment_serves_each_group_its_ranking_and_counts_clicks(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
-    monkeypatch.setattr(trainer.settings(), "promote_margin", -1.0)
-    monkeypatch.setattr(trainer, "TOLERANCE", 1.0)
-    simulator.simulate(users=20, sessions=6, hours=3)
-    event_worker.drain()
-    trainer.retrain(force=True, epochs=2)
-    experiment.start("ab-test")
+def test_experiment_serves_each_group_its_model_and_promotes_the_winner(
+    tmp_path, monkeypatch
+) -> None:
+    first = trained(tmp_path, monkeypatch, users=20)
+    second = trainer.retrain(force=True, epochs=2)
+    started = experiment.start("ab-test", min_impressions=1)
+    assert (started["control_model"], started["treatment_model"]) == (
+        first["version"],
+        second["version"],
+    )
     with pytest.raises(ValueError, match="running"):
         experiment.start("ab-other")
+    assert trainer.retrain(force=True)["trained"] is False
     result = experiment.simulate_feed(rounds=1, users=20)
-    assert result["impressions"] > 0
-    assert {a["readers"] > 0 for a in result["arms"].values()} == {True}
+    assert all(a["readers"] and a["impressions"] for a in result["arms"].values())
     with connection() as conn:
-        served = conn.execute("SELECT user_id,strategy FROM generation_runs").fetchall()
-    assert {r["strategy"] for r in served} == {"control", "model"}
+        served = conn.execute("SELECT * FROM served_posts WHERE experiment='ab-test'").fetchall()
+        newest = conn.execute("SELECT max(post_id) AS id FROM post_embeddings").fetchone()["id"]
+    assert newest == POSTS + experiment.NEW_POSTS
+    models = {"control": first["version"], "treatment": second["version"]}
     assert all(
-        (r["strategy"] == "control") == (experiment.arm(r["user_id"], "ab-test") == "control")
-        for r in served
+        row["arm"] == experiment.arm(row["user_id"], "ab-test")
+        and row["model_version"] == models[row["arm"]]
+        for row in served
     )
-    experiment.stop()
-    assert generation.generate_for_user(READER)["strategy"] == "model"
+    # Reactions to served posts count as ranked; the random exposure before them does not.
+    flags = {e["ranked"] for e in dataset.load_events() if e["action"] == "impression"}
+    assert flags == {True, False}
+    monkeypatch.setattr(experiment, "verdict", lambda *args: "treatment wins")
+    assert experiment.stop()["active_model"] == second["version"]
+    assert generation.generate_for_user(READER)["model_version"] == second["version"]
+
+
+def test_pipeline_step_starts_an_experiment_for_a_new_candidate(tmp_path, monkeypatch) -> None:
+    trained(tmp_path, monkeypatch, users=20)
+    monkeypatch.setattr(trainer.settings(), "retrain_min_sessions", 0)
+    candidate = trainer.step()
+    current = experiment.running()
+    assert current["treatment_model"] == candidate["version"]
+    assert trainer.step() == {"experiment": current["name"], "ready": False}
+    with connection() as conn:
+        conn.execute("UPDATE experiments SET min_impressions=0")
+    assert trainer.step()["verdict"].startswith("inconclusive")
+    assert experiment.running() is None
+    assert registry.newest_candidate()["id"] == candidate["version"]

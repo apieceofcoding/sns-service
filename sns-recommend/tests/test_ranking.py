@@ -8,13 +8,13 @@ def candidates(*authors):
 
 
 def test_without_a_model_retrieval_order_is_kept(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(ranking, "active_model", lambda: (None, None))
+    monkeypatch.setattr(ranking, "serving_model", lambda version: (None, None))
     result = ranking.rank(7, candidates(1, 2, 3))
     assert result == {"ids": [1, 2, 3], "scores": None, "strategy": "embedding"}
 
 
 def test_broken_scores_fall_back(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(ranking, "active_model", lambda: (object(), 3))
+    monkeypatch.setattr(ranking, "serving_model", lambda version: (object(), 3))
     monkeypatch.setattr(ranking, "recent_history", lambda user: [])
     monkeypatch.setattr(ranking, "post_features", lambda ids: {i: {} for i in ids})
     monkeypatch.setattr(ranking, "encode", lambda *a: None)

@@ -12,9 +12,12 @@ from .model import Ranker, score
 
 
 def split(sessions: list[dict], valid_ratio: float = 0.25) -> tuple[list[dict], list[dict]]:
-    """Split by time: the model is checked on visits that happened after its training data."""
+    """Split by time: the model is checked on visits that happened after its training data.
+
+    Only visits no ranking chose are used for checking. In a ranked visit the reader could
+    only react to what a model had already picked, so its score flatters that model."""
     cut = int(len(sessions) * (1 - valid_ratio))
-    return sessions[:cut], sessions[cut:]
+    return sessions[:cut], [s for s in sessions[cut:] if not s["ranked"]]
 
 
 def fit(

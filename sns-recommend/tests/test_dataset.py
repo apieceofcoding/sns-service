@@ -30,11 +30,34 @@ def test_visits_are_split_by_gap_and_history_never_includes_the_future():
     assert second["labels"] == [[0.0, 1.0]]
 
 
+def test_a_reaction_is_a_label_only_within_the_window_after_the_impression():
+    events = [
+        event(2, "click", -1),  # before the post was shown
+        event(2, "impression", 0),
+        event(3, "impression", 0),
+        event(3, "like", 9),  # after the window closed
+    ]
+    [session] = build_sessions(events)
+    assert session["labels"] == [[0.0, 0.0], [0.0, 0.0]]
+
+
+def test_impressions_wait_until_their_label_window_closes():
+    events = [event(2, "impression", 0), event(3, "impression", 10)]
+    [session] = build_sessions(events, now=T0 + timedelta(minutes=12))
+    assert session["candidates"] == [2]
+
+
+def test_a_visit_is_ranked_when_a_ranking_chose_its_posts():
+    events = [event(2, "impression", 0), {**event(3, "impression", 10), "ranked": True}]
+    free, ranked = build_sessions(events)
+    assert (free["ranked"], ranked["ranked"]) == (False, True)
+
+
 def test_encoding_keeps_the_latest_action_last_and_pads_the_rest():
     features = {i: {"vector": [float(i), 1.0], "created_at": T0} for i in (1, 2, 3)}
     session = {
-        "start": T0 + timedelta(hours=2),
-        "history": [(1, "like", T0), (2, "click", T0 + timedelta(hours=1))],
+        "start": T0 + timedelta(days=2),
+        "history": [(1, "like", T0), (2, "click", T0 + timedelta(days=1))],
         "candidates": [3, 99],  # 99 has no vector and is dropped
         "labels": [[1.0, 0.0], [1.0, 1.0]],
     }

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from .dataset import HISTORY, LABELS, POSITIVE, encode, post_features
 from .db import connection
 from .model import score
-from .model_store import active_model
+from .model_store import serving_model
 
 
 def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
@@ -22,10 +22,10 @@ def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
     return [(r["post_id"], r["action"], r["occurred_at"]) for r in reversed(rows)]
 
 
-def rank(user_id: int, candidates: list[dict]) -> dict:
+def rank(user_id: int, candidates: list[dict], version: int | None = None) -> dict:
     """Order by predicted reactions. Without a usable model, keep the retrieval order."""
     retrieval_order = [c["id"] for c in candidates]
-    model, version = active_model()
+    model, version = serving_model(version)
     if model is None or not candidates:
         return {"ids": retrieval_order, "scores": None, "strategy": "embedding"}
     history = recent_history(user_id)

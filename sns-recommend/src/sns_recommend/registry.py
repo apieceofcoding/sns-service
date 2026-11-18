@@ -21,12 +21,39 @@ def register(path: str, report: dict, status: str = "candidate") -> int:
                 json.dumps(report),
             ),
         ).fetchone()
+        if status == "candidate":
+            # Only the newest candidate waits for an experiment.
+            conn.execute(
+                "UPDATE model_versions SET status='rejected' WHERE status='candidate' AND id<>%s",
+                (row["id"],),
+            )
     return row["id"]
 
 
 def active() -> dict | None:
     with connection() as conn:
         return conn.execute("SELECT * FROM model_versions WHERE status='active'").fetchone()
+
+
+def version_row(version: int) -> dict | None:
+    with connection() as conn:
+        return conn.execute("SELECT * FROM model_versions WHERE id=%s", (version,)).fetchone()
+
+
+def newest_candidate() -> dict | None:
+    """The latest version that passed the offline gate and waits for an experiment."""
+    with connection() as conn:
+        return conn.execute(
+            "SELECT * FROM model_versions WHERE status='candidate' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+
+
+def reject(version: int) -> None:
+    with connection() as conn:
+        conn.execute(
+            "UPDATE model_versions SET status='rejected' WHERE id=%s AND status='candidate'",
+            (version,),
+        )
 
 
 def promote(version: int) -> dict:
