@@ -261,17 +261,22 @@ POSTS: dict[str, tuple[str, ...]] = {
 
 
 def post_body(topic: str, ordinal: int) -> str:
-    """Return one of 40 fixed examples per topic; never add a cosmetic post number."""
+    """40 fixed examples per topic. Later ordinals join two different examples."""
     posts = POSTS[topic]
-    if not 0 <= ordinal < len(posts):
-        raise ValueError("post ordinal must be between 0 and 39")
-    return posts[ordinal]
+    extra = ordinal // len(posts)
+    if not 0 <= extra < len(posts):
+        raise ValueError("post ordinal must be between 0 and 1599")
+    first = posts[ordinal % len(posts)]
+    if extra == 0:
+        return first
+    # 7 shares no factor with 40, so every ordinal pairs a sentence with a different one.
+    return f"{first} {posts[(ordinal + 7 * extra) % len(posts)]}"
 
 
 def post_created_at(post_id: int, reference: datetime, group_size: int = 5) -> datetime:
     """Include both inclusive 48-hour boundaries and future-post rejection cases."""
-    if group_size < 1 or not 1 <= post_id <= 40 * group_size:
-        raise ValueError("post id must fit the topic groups")
+    if group_size < 1 or post_id < 1:
+        raise ValueError("post id and group size must be positive")
     if reference.utcoffset() is None:
         raise ValueError("reference must include a timezone")
     if post_id <= group_size:
