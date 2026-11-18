@@ -26,17 +26,17 @@ def readers(users: int = 300) -> list[int]:
 
 
 def age_cost(shift: bool = False) -> float:
-    """What an hour of post age costs a reader. Each shift flips between two moods of the
-    whole service: ordinary days, and a rush where only fresh posts get attention.
+    """What an hour of post age costs a reader. After a shift the whole service is in a rush
+    where only fresh posts get attention.
 
     Stored so every command sees the same readers."""
     with connection() as conn:
         row = conn.execute(
-            """INSERT INTO simulation(shifts) VALUES (%s) ON CONFLICT (only_row)
-            DO UPDATE SET shifts=simulation.shifts+%s RETURNING shifts""",
-            (int(shift), int(shift)),
+            """INSERT INTO simulation(shifted) VALUES (%s) ON CONFLICT (only_row)
+            DO UPDATE SET shifted=simulation.shifted OR %s RETURNING shifted""",
+            (shift, shift),
         ).fetchone()
-    return 0.5 if row["shifts"] % 2 else 0.05
+    return 0.5 if row["shifted"] else 0.05
 
 
 def taste(user_id: int) -> dict[str, float]:
