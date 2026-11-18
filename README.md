@@ -73,8 +73,8 @@ cd sns-service/sns-recommend
 | 후보 수집 (retrieve) | 볼 만한 글을 빠르게 모음 | part-2 |
 | 순위 매기기 (rerank) | 우리 데이터로 학습한 트랜스포머가 반응 확률을 예측 | part-3, part-4 |
 | 거르기와 섞기 (validate, diversify) | 모델 출력 검사, 같은 작성자 연속 줄이기 | part-4 |
-| 결과 저장 (publish) | Redis에 목록 발행, 조회는 읽기만 함 | part-4 |
-| 평가 (evaluation) | 학습 뒤 기간의 방문으로 비교하고, 나아질 때만 교체 | part-3, part-5 |
+| 결과 저장 (publish) | Redis에 목록 발행, 조회는 모델 없이 읽음 | part-4 |
+| 평가 (evaluation) | 후보 재현율, 학습 뒤 기간의 방문, A/B 실험으로 확인하고 이긴 모델만 교체 | part-2, part-3, part-5, part-6 |
 
 ### part-1. 기존 SNS와 실습 환경
 
@@ -133,7 +133,7 @@ uv run sns-recommend init
 ```sh
 # 합성 독자 300명이 4시간 동안 글을 보고 반응
 uv run sns-recommend simulate
-# SNS DB의 변경을 user_events로 옮기고 글 240개를 임베딩. 1분쯤 걸림
+# SNS DB의 변경을 user_events로 옮기고 글 1,200개를 임베딩. 1~2분 걸림
 uv run sns-recommend-event-worker --once
 ```
 
@@ -173,7 +173,7 @@ uv run sns-recommend candidates --user 7
 uv run sns-recommend recall
 ```
 
-`recall@30`은 최근 1시간 동안 클릭하거나 좋아요한 글 중, 그 시점 전의 정보로 만든 후보에 이미 들어 있던 비율입니다. `random`은 무작위 30개를 골랐을 때의 기댓값이에요. 최신순과 인기순을 섞으면 의미 검색만 쓸 때보다 재현율이 조금 낮아지지만, 새 글과 인기 글도 노출할 기회를 얻습니다.
+`recall@30`은 최근 1시간 동안 클릭하거나 좋아요한 글 중, 그 시점 전의 정보로 만든 후보에 이미 들어 있던 비율입니다. 독자가 반응할 만한 글은 수백 개인데 후보는 30개라 값 자체는 작아요. `random`(무작위 30개의 기댓값)보다 몇 배 높은지를 봅니다. 최신순과 인기순을 섞으면 의미 검색만 쓸 때보다 재현율이 조금 낮아지지만, 새 글과 인기 글도 노출할 기회를 얻습니다.
 
 별도 터미널에서 `uv run sns-recommend-event-worker`를 켜 두면 이후 변경도 계속 반영해요.
 
@@ -187,7 +187,7 @@ uv sync --locked
 uv run sns-recommend train
 ```
 
-노출 하나가 학습 예시 하나이고, 그 뒤 클릭과 좋아요가 정답입니다. 입력은 사용자가 최근 반응한 글 20개와 보여 준 글들이에요. 앞의 75% 기간으로 학습하고, 뒤 25% 기간의 방문으로 평가합니다. 학습에 쓰지 않은 미래 방문으로 확인해야 실제 성능에 가깝습니다.
+노출 하나가 학습 예시 하나이고, 그 뒤 5분 안의 클릭과 좋아요가 정답입니다. 5분이 지나지 않은 노출은 정답이 아직 바뀔 수 있어 학습에서 빼요. 입력은 사용자가 최근 반응한 글 20개와 보여 준 글들이에요. 앞의 75% 기간으로 학습하고, 뒤 25% 기간의 방문으로 평가합니다. 학습에 쓰지 않은 미래 방문으로 확인해야 실제 성능에 가깝습니다.
 
 | 결과 | 뜻 |
 |---|---|
@@ -226,13 +226,13 @@ curl -fsS http://localhost:8001/internal/feeds/7
 [SNS 화면](http://localhost:3000)에 로그인하고 같은 브라우저에서 [내 정보](http://localhost:8080/api/v1/users/me)의 `id`를 확인해요.
 
 ```sh
-# 10을 로그인한 사용자 ID로 변경. 반응이 없으면 최신순과 인기순 후보로 시작
-uv run sns-recommend generate --user 10
+# 37을 로그인한 사용자 ID로 변경. 반응이 없으면 최신순과 인기순 후보로 시작
+uv run sns-recommend generate --user 37
 # 새 터미널: 행동이 바뀐 사용자의 추천을 계속 갱신
 uv run sns-recommend-worker
 ```
 
-[SNS 화면](http://localhost:3000)의 **추천** 탭을 새로고침합니다. 글을 누르거나 좋아요를 누르면 이벤트 worker가 갱신을 예약하고, 추천 worker가 새 목록을 발행해요. 조회 API는 Redis를 읽기만 하며 모델을 호출하지 않습니다. 스크롤 중에는 커서가 같은 목록을 가리켜 순서가 유지돼요.
+[SNS 화면](http://localhost:3000)의 **추천** 탭을 새로고침합니다. 글을 누르거나 좋아요를 누르면 이벤트 worker가 갱신을 예약하고, 추천 worker가 새 목록을 발행해요. 조회 API는 저장된 목록을 읽으며 모델을 호출하지 않습니다. 스크롤 중에는 커서가 같은 목록을 가리켜 순서가 유지돼요.
 
 ### part-5. 지속 학습 파이프라인
 
@@ -245,10 +245,10 @@ uv run sns-recommend train
 uv run sns-recommend models
 ```
 
-새 모델은 같은 평가 방문에서 임베딩 순보다 NDCG가 0.01 이상 높고, 지금 서비스 중인 모델보다 나빠지지 않을 때만 교체합니다. 떨어지면 `rejected`로 기록만 남아요. 모든 버전은 `model_versions`에 학습 기간, 데이터 수, 지표와 함께 저장됩니다.
+다시 학습할 때는 최근 방문 2,400개만 씁니다. 독자들이 지금 반응하는 방식을 따라가기 위해서예요. 새 모델은 같은 평가 방문에서 임베딩 순보다 NDCG가 0.01 이상 높고, 지금 서비스 중인 모델보다 나빠지지 않을 때만 교체합니다. 떨어지면 `rejected`로 기록만 남아요. 모든 버전은 `model_versions`에 학습 기간, 데이터 수, 지표와 함께 저장됩니다.
 
 ```sh
-# 독자들의 취향이 바뀜
+# 독자들의 반응 방식이 바뀜: 새 글에만 반응이 몰림
 uv run sns-recommend simulate --shift --hours 1 --sessions 8
 uv run sns-recommend-event-worker --once
 # 서비스 중인 모델의 최근 1시간 성능
@@ -258,7 +258,7 @@ uv run sns-recommend train
 uv run sns-recommend models
 ```
 
-`monitor`의 `recent.active`가 학습 당시보다 떨어지면 취향이 움직였다는 신호입니다. 다시 학습한 모델이 기준을 넘으면 교체돼요. worker는 다음 생성부터 새 버전을 불러옵니다.
+`monitor`의 `recent.active`가 학습 당시보다 떨어지면 독자들의 반응 방식이 달라졌다는 신호입니다. 한 사람의 관심사가 바뀌는 것은 모델이 최근 반응을 입력으로 읽어 따라가지만, 모두의 반응 방식이 바뀌면 다시 학습해야 해요. 다시 학습한 모델이 기준을 넘으면 교체됩니다. worker는 다음 생성부터 새 버전을 불러와요.
 
 ```sh
 # 직전 버전으로 되돌리기
@@ -279,18 +279,48 @@ uv run sns-recommend benchmark --user 7
 curl -fsS http://localhost:8001/metrics
 ```
 
-`benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델과 대체 순위의 비율, 서비스 중인 모델 버전과 진행 중인 실험을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
+`benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델, 탐색과 대체 순위의 생성 수, 서비스 중인 모델 버전과 진행 중인 실험을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
+
+part-5까지는 오프라인 기준만 넘으면 새 모델로 바로 교체했습니다. 오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줘요. part-6부터 새 모델은 **후보**로 남고, 실제로 보여 준 피드에서 이겨야 교체됩니다.
 
 ```sh
-# A/B 실험: 독자를 반으로 나눠 대조군은 임베딩 순, 실험군은 모델 순으로 피드 제공
-uv run sns-recommend experiment start --name ab-1
-# 독자들이 실제로 발행된 피드를 열어 위쪽 10개를 보고 반응. 3번 반복
+# 반응 방식이 다시 바뀜. 이번에 학습한 모델은 교체되지 않고 후보로 남음
+uv run sns-recommend simulate --shift --hours 1 --sessions 8
+uv run sns-recommend-event-worker --once
+uv run sns-recommend train
+# A/B 실험 시작: 대조군은 서비스 중인 모델, 실험군은 후보 모델
+uv run sns-recommend experiment start
+# 라운드마다 새 글이 올라오고, 독자가 발행된 피드의 위쪽 10개를 보고 반응. 3라운드에 2~3분
 uv run sns-recommend experiment run --rounds 3
 uv run sns-recommend experiment report
+# 종료와 판정. 실험군이 이기면 후보가 서비스 모델이 됨
+uv run sns-recommend experiment stop
+uv run sns-recommend models
+```
+
+| 항목 | 기준 |
+|---|---|
+| 그룹 배정 | 실험 이름과 사용자 ID의 해시. 같은 독자는 항상 같은 그룹 |
+| 서빙 기록 | 조회할 때마다 `served_posts`에 글, 위치, 목록, 모델 버전과 그룹을 남김. 반응을 이 기록에 이어 붙여 그룹별로 셈 |
+| 계획한 크기 | 그룹마다 노출 3,000건(`--min-impressions`). 채우기 전의 `verdict`는 `wait` |
+| 검정 | 독자를 나눴으므로 독자 단위로 비교. 그룹 이름표를 섞어도 이만한 차이가 나오는 비율이 `p_value` |
+| 가드레일 | 클릭률이 올라도 좋아요율이 대조군의 95% 아래면 대조군 승 |
+| 판정 | `treatment wins`면 후보로 교체, `control wins`나 `no clear difference`면 후보 탈락 |
+
+한 독자의 노출은 서로 닮아 있어서, 노출을 하나씩 독립으로 세면 우연한 차이도 의미 있어 보입니다. 결과를 중간에 보고 유리할 때 멈춰도 같은 문제가 생겨요. 그래서 크기를 먼저 정하고 독자 단위로 비교합니다.
+
+피드의 10%는 **탐색**으로 후보를 무작위 순서로 보여 줍니다(`strategy: explore`, `EXPLORE_RATE`). 순위 모델이 고른 글에만 반응이 쌓이면 그 데이터로는 모델을 공정하게 평가할 수 없기 때문이에요. 오프라인 평가와 `monitor`는 순위 모델이 고르지 않은 방문만 씁니다.
+
+```sh
+# 섞기 실험: 같은 모델에서 작성자 섞기를 끈 그룹과 비교
+uv run sns-recommend experiment start --no-spread
+uv run sns-recommend experiment run --rounds 3
 uv run sns-recommend experiment stop
 ```
 
-오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줍니다. 실험은 우리가 **실제로 보여 준 피드**에 독자가 얼마나 반응했는지를 그룹별로 비교해요. `p_value`가 0.05보다 작으면 차이가 우연일 가능성이 낮다고 봅니다. 실험 중 노출은 추천이 고른 글이라 이후 학습 데이터에 노출 편향이 생겨요.
+`one_author_share`는 한 번에 보여 준 글 중 가장 많이 나온 작성자의 비율입니다. 섞기를 꺼도 클릭률에 뚜렷한 차이가 없다면, 섞기는 클릭을 잃지 않으면서 한 작성자로 쏠리는 것을 줄인다는 뜻이에요.
+
+`sns-recommend-trainer`는 이 과정을 이어서 실행합니다. 새 데이터가 쌓이면 다시 학습하고, 후보가 생기면 실험을 시작하고, 계획한 노출이 차면 판정해요.
 
 | 장애 | 동작 |
 |---|---|
@@ -321,29 +351,29 @@ docker compose up -d --wait  # part-2부터
 
 ## 실습 데이터
 
-`seed`는 작성자 6명, 독자 3명과 게시글 240개를 만듭니다. `simulate`는 합성 독자 300명(ID 101부터)을 더하고 노출과 반응을 기록해요.
+`seed`는 작성자 24명, 독자 3명과 게시글 1,200개를 만듭니다. `simulate`는 합성 독자 300명(ID 101부터)을 더하고 노출과 반응을 기록해요.
 
 | ID | 역할 | 작성 주제 또는 취향 |
 |---|---|---|
-| 1 | 작성자 | 백엔드 개발 |
-| 2 | 작성자 | 여행 |
-| 3 | 작성자 | 운동 |
-| 4 | 작성자 | AI 개발 |
-| 5 | 작성자 | 여행 유튜브 |
-| 6 | 작성자 | 운동 식단 |
+| 1, 11, 21, 31 | 작성자 | 백엔드 개발 |
+| 2, 12, 22, 32 | 작성자 | 여행 |
+| 3, 13, 23, 33 | 작성자 | 운동 |
+| 4, 14, 24, 34 | 작성자 | AI 개발 |
+| 5, 15, 25, 35 | 작성자 | 여행 유튜브 |
+| 6, 16, 26, 36 | 작성자 | 운동 식단 |
 | 7 | 독자 | 백엔드와 AI 개발 |
 | 8 | 독자 | 여행과 여행 유튜브 |
 | 9 | 독자 | 운동과 운동 식단 |
 | 101~400 | 합성 독자 | 무작위 두 주제 |
 
-작성자마다 40개씩 생성하며, 최신순 비교를 위해 최근 48시간의 경계와 미래 시각을 포함해요. `seed`는 빈 실습 DB에서 한 번 실행합니다. 기존 ID와 충돌하면 중단하며 데이터를 덮어쓰지 않습니다. 모델 점수는 합성 독자의 행동으로 잰 것이며 실제 서비스 성과가 아닙니다.
+작성자마다 50개씩, 약 20시간에 걸쳐 1분에 하나씩 올라온 것으로 만들어요. 주제마다 예문은 40개이고, 나머지 글은 두 예문을 이어 붙입니다. 최신순 비교를 위해 최근 48시간의 경계와 미래 시각도 포함해요. `seed`는 빈 실습 DB에서 한 번 실행합니다. 기존 ID와 충돌하면 중단하며 데이터를 덮어쓰지 않습니다. 모델 점수는 합성 독자의 행동으로 잰 것이며 실제 서비스 성과가 아닙니다.
 
 ## 저장 위치
 
 | 저장소 | 내용 | 연결 설정 |
 |---|---|---|
 | SNS DB (`snsdb`, 5432) | 회원, 게시글, 좋아요 원본과 post_actions | `SOURCE_DATABASE_URL` |
-| 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터, 모델 버전, 생성 기록 | `DATABASE_URL` |
+| 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터, 모델 버전, 생성 기록, 서빙 기록, 실험 | `DATABASE_URL` |
 | Redis (56379) | 완성된 추천 ID 목록 | `REDIS_URL` |
 | `sns-recommend/models/` | 학습한 모델 파일 | `MODEL_DIR` |
 

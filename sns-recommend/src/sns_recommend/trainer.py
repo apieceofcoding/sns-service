@@ -34,6 +34,7 @@ def gate(ndcg: dict) -> tuple[bool, str]:
 def retrain(force: bool = False, epochs: int = 40) -> dict:
     serving = active()
     sessions, features = prepare()
+    sessions = sessions[-settings().train_sessions :]
     if serving and not force:
         new = sum(s["start"] > serving["trained_until"] for s in sessions)
         if new < settings().retrain_min_sessions:

@@ -17,6 +17,7 @@ from sns_recommend import (
     ranking,
     registry,
     retrieval,
+    seed,
     simulator,
     source,
     source_demo,
@@ -24,13 +25,13 @@ from sns_recommend import (
 )
 from sns_recommend.db import connection, initialize, source_connection
 from sns_recommend.embeddings import embedding_model
-from sns_recommend.seed import seed
 from sns_recommend.sync_cursor import load_position
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("SNS_TEST_DISPOSABLE_DB"), reason="needs disposable databases"
 )
 READER = 7
+POSTS = 240  # A fifth of the course data keeps these tests quick.
 
 
 def rows(action: str, user_id: int = READER) -> list[dict]:
@@ -45,10 +46,13 @@ def rows(action: str, user_id: int = READER) -> list[dict]:
 def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
-        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,model_versions")
+        conn.execute(
+            "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,model_versions"
+        )
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
-    seed()
+    monkeypatch.setattr(seed, "POSTS", POSTS)
+    seed.seed()
     monkeypatch.setattr(event_queue, "current_created_at", lambda user_id: None)
 
 
@@ -217,7 +221,7 @@ def test_new_embedding_space_indexes_every_post_again(monkeypatch: pytest.Monkey
     with connection() as conn:
         before = conn.execute("SELECT count(*) AS n FROM post_embeddings").fetchone()["n"]
     monkeypatch.setattr(indexing, "embedding_model", lambda: "other-model")
-    assert before == 240
+    assert before == POSTS
     assert indexing.index_changes()["indexed"] > 0
 
 
