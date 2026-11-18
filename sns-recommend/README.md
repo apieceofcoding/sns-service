@@ -6,7 +6,7 @@
 |---|---|
 | `sns-recommend-event-worker` | SNS DB의 변경을 읽어 `user_events`와 글 벡터를 갱신 |
 | `sns-recommend-worker` | 후보 수집, 순위 모델 점수, 작성자 섞기 후 Redis에 발행 |
-| `sns-recommend-trainer` | 새 데이터가 쌓이면 순위 모델을 다시 학습하고, 기준을 넘을 때만 교체 |
-| `uvicorn sns_recommend.api:app` | 저장된 추천 목록 조회. 모델을 호출하지 않음 |
+| `sns-recommend-trainer` | 새 데이터가 쌓이면 순위 모델을 다시 학습하고, A/B 실험에서 이긴 모델만 교체 |
+| `uvicorn sns_recommend.api:app` | 저장된 추천 목록 조회와 서빙 기록. 모델을 호출하지 않음 |
 
 실행 명령은 [전체 실습 가이드](../README.md)를 따릅니다.
