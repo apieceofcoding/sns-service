@@ -15,7 +15,7 @@ def main():
     simulate.add_argument("--sessions", type=int, default=15)
     simulate.add_argument("--hours", type=float, default=4)
     simulate.add_argument(
-        "--shift", action="store_true", help="readers change how much they favor fresh posts"
+        "--shift", action="store_true", help="from now on readers favor fresh posts far more"
     )
     post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
     post.add_argument("--post", type=int, default=1001)
