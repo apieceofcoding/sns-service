@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import torch
 
@@ -14,6 +14,7 @@ from .embeddings import embedding_model
 HISTORY = 20
 CANDIDATES = 30
 SESSION_GAP = timedelta(minutes=5)
+LABEL_WINDOW = timedelta(minutes=5)
 POSITIVE = ("click", "like", "reply", "repost")
 ACTIONS = {action: i + 1 for i, action in enumerate(POSITIVE)}
 LABELS = ("click", "like")
@@ -30,20 +31,24 @@ def load_events(until: datetime | None = None) -> list[dict]:
         ).fetchall()
 
 
-def build_sessions(events: list[dict]) -> list[dict]:
-    """Group a user's impressions into visits. Labels are reactions to the shown posts."""
+def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict]:
+    """Group a user's impressions into visits.
+
+    A reaction is a label only if it follows the impression within LABEL_WINDOW. Impressions
+    whose window is still open are left out: their labels could still change."""
+    closed = (now or datetime.now(UTC)) - LABEL_WINDOW
     sessions: list[dict] = []
     by_user: dict[int, list[dict]] = {}
     for event in events:
         by_user.setdefault(event["user_id"], []).append(event)
     for user_id, rows in by_user.items():
-        reactions: dict[int, set[str]] = {}
+        reactions: dict[int, list[tuple[str, datetime]]] = {}
         for row in rows:
             if row["action"] in POSITIVE:
-                reactions.setdefault(row["post_id"], set()).add(row["action"])
+                reactions.setdefault(row["post_id"], []).append((row["action"], row["occurred_at"]))
         current: dict | None = None
         for row in rows:
-            if row["action"] != "impression":
+            if row["action"] != "impression" or row["occurred_at"] > closed:
                 continue
             if current is None or row["occurred_at"] - current["last"] > SESSION_GAP:
                 history = [
@@ -56,7 +61,12 @@ def build_sessions(events: list[dict]) -> list[dict]:
                 sessions.append(current)
             current["last"] = row["occurred_at"]
             if len(current["candidates"]) < CANDIDATES:
-                done = reactions.get(row["post_id"], set())
+                shown_at = row["occurred_at"]
+                done = {
+                    action
+                    for action, at in reactions.get(row["post_id"], ())
+                    if shown_at <= at <= shown_at + LABEL_WINDOW
+                }
                 current["candidates"].append(row["post_id"])
                 current["labels"].append([float(label in done) for label in LABELS])
     return sorted(sessions, key=lambda s: s["start"])
@@ -80,7 +90,7 @@ def post_features(post_ids) -> dict[int, dict]:
 
 
 def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.Tensor]:
-    """Turn sessions into padded tensors. Ages are in hours from the session start."""
+    """Turn sessions into padded tensors. Ages are in days before the session start."""
     ids = sorted(features)
     index = {post_id: i + 1 for i, post_id in enumerate(ids)}  # 0 is padding
     dims = len(features[ids[0]]["vector"]) if ids else 1
@@ -103,16 +113,17 @@ def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.T
         for j, (post_id, action, at) in enumerate(history):
             batch["history"][row, offset + j] = index[post_id]
             batch["actions"][row, offset + j] = ACTIONS[action]
-            batch["history_age"][row, offset + j] = hours(session["start"] - at)
+            batch["history_age"][row, offset + j] = days(session["start"] - at)
         kept = [(c, y) for c, y in zip(session["candidates"], session["labels"]) if c in index]
         for j, (post_id, label) in enumerate(kept[:CANDIDATES]):
             batch["candidates"][row, j] = index[post_id]
-            batch["candidate_age"][row, j] = hours(
+            batch["candidate_age"][row, j] = days(
                 session["start"] - features[post_id]["created_at"]
             )
             batch["labels"][row, j] = torch.tensor(label)
     return batch
 
 
-def hours(delta: timedelta) -> float:
-    return max(0.0, delta.total_seconds() / 3600)
+def days(delta: timedelta) -> float:
+    """Days, not hours: inputs near the size of the other inputs train far better."""
+    return max(0.0, delta.total_seconds() / 86400)

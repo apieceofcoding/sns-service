@@ -7,14 +7,14 @@ from .db import initialize, source_connection
 def main():
     parser = argparse.ArgumentParser(prog="sns-recommend")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "seed", "status", "index"):
+    for name in ("init", "seed", "status"):
         commands.add_parser(name)
     simulate = commands.add_parser("simulate", help="synthetic readers see posts and react")
     simulate.add_argument("--users", type=int, default=300)
     simulate.add_argument("--sessions", type=int, default=15)
     simulate.add_argument("--hours", type=float, default=4)
     simulate.add_argument(
-        "--shift", action="store_true", help="every simulated reader changes taste"
+        "--shift", action="store_true", help="readers change how much they favor fresh posts"
     )
     post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
     post.add_argument("--post", type=int, default=1001)
@@ -22,9 +22,6 @@ def main():
     for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     commands.add_parser("recall").add_argument("--hours", type=float, default=1)
-    baseline = commands.add_parser("baseline")
-    baseline.add_argument("--user", type=int, default=7)
-    baseline.add_argument("--strategy", choices=["latest", "popular"], default="latest")
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
@@ -53,10 +50,6 @@ def run(args):
         from .source_demo import change_post
 
         return change_post(args.post, args.body)
-    if args.command == "index":
-        from .indexing import index_changes
-
-        return index_changes()
     if args.command == "profile":
         from .profiles import build_user_vector
 
@@ -77,10 +70,6 @@ def run(args):
         from .training import train
 
         return train(args.epochs)
-    if args.command == "baseline":
-        from .baseline import baseline
-
-        return baseline(args.user, args.strategy)
     if args.command == "generate":
         from .generation import generate_for_user
 
