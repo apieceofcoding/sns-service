@@ -248,7 +248,7 @@ uv run sns-recommend models
 다시 학습할 때는 최근 방문 2,400개만 씁니다. 독자들이 지금 반응하는 방식을 따라가기 위해서예요. 새 모델은 같은 평가 방문에서 임베딩 순보다 NDCG가 0.01 이상 높고, 지금 서비스 중인 모델보다 나빠지지 않을 때만 교체합니다. 떨어지면 `rejected`로 기록만 남아요. 모든 버전은 `model_versions`에 학습 기간, 데이터 수, 지표와 함께 저장됩니다.
 
 ```sh
-# 독자들의 반응 방식이 바뀜: 새 글에만 반응이 몰림
+# 지금부터 독자들의 반응 방식이 바뀜: 새 글에만 반응이 몰림
 uv run sns-recommend simulate --shift --hours 1 --sessions 8
 uv run sns-recommend-event-worker --once
 # 서비스 중인 모델의 최근 1시간 성능
@@ -281,12 +281,13 @@ curl -fsS http://localhost:8001/metrics
 
 `benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델, 탐색과 대체 순위의 생성 수, 서비스 중인 모델 버전과 진행 중인 실험을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
 
-part-5까지는 오프라인 기준만 넘으면 새 모델로 바로 교체했습니다. 오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줘요. part-6부터 새 모델은 **후보**로 남고, 실제로 보여 준 피드에서 이겨야 교체됩니다.
+part-5까지는 오프라인 기준만 넘으면 새 모델로 바로 교체했습니다. 오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줘요. part-6부터 새 모델은 **후보**로 남고, 실제로 보여 준 피드에서 이겨야 교체됩니다. 독자들은 part-5에서 바뀐 방식 그대로 반응해요. 그 전에 학습한 모델이 서비스 중일 때, 바뀐 뒤의 방문으로 학습한 후보가 실제로 더 나은지 확인합니다.
 
 ```sh
-# 반응 방식이 다시 바뀜. 이번에 학습한 모델은 교체되지 않고 후보로 남음
-uv run sns-recommend simulate --shift --hours 1 --sessions 8
-uv run sns-recommend-event-worker --once
+# part-5의 trainer를 Ctrl+C로 종료한 뒤, 반응 방식이 바뀌기 전에 학습한 첫 모델을 서비스 모델로 둠
+uv run sns-recommend models
+uv run sns-recommend promote --version 1
+# 다시 학습. 이번에는 교체되지 않고 후보로 남음
 uv run sns-recommend train
 # A/B 실험 시작: 대조군은 서비스 중인 모델, 실험군은 후보 모델
 uv run sns-recommend experiment start
