@@ -6,9 +6,9 @@ from sns_recommend.seed import AUTHORS, POSTS, TOPICS, USERNAMES, post_fields, t
 
 
 def test_four_authors_per_topic_and_three_readers():
-    assert len(set(USERNAMES.values())) == len(USERNAMES) == 27
+    assert len(set(USERNAMES.values())) == len(USERNAMES) == 30
     assert Counter(topic_of(author) for author in AUTHORS) == dict.fromkeys(TOPICS, 4)
-    assert set(USERNAMES) - set(AUTHORS) == {7, 8, 9}
+    assert set(USERNAMES) - set(AUTHORS) == {7, 8, 9, 17, 18, 19}
 
 
 def test_every_post_has_its_own_body_and_authors_share_the_work():
