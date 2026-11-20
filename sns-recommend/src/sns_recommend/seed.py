@@ -7,6 +7,7 @@ from .db import source_connection
 TOPICS = ("backend", "travel", "fitness", "ai_dev", "travel_video", "fitness_food")
 POSTS = 1200
 # Four authors write about each topic. Readers 7, 8 and 9 only read.
+# 17, 18 and 19 just signed up: no posts and no reactions yet.
 USERNAMES = {
     1: "minjun_dev",
     2: "jiwoo_trip",
@@ -23,6 +24,9 @@ USERNAMES = {
     14: "eunji_prompt",
     15: "siwoo_films",
     16: "bora_lunchbox",
+    17: "sujin_hello",
+    18: "minho_newbie",
+    19: "arin_firstday",
     21: "kyungmin_db",
     22: "sohee_route",
     23: "daeun_trail",
