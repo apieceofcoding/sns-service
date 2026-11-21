@@ -12,7 +12,7 @@ from random import Random
 from uuid import uuid4
 
 from .db import connection, source_connection
-from .seed import AUTHORS, TOPICS, advance_identity, post_fields, topic_of
+from .seed import AUTHORS, TOPICS, advance_identity, topic_of
 from .source import VISIBLE
 
 READERS = {
