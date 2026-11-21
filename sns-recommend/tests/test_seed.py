@@ -5,7 +5,7 @@ from sns_recommend.post_examples import post_created_at
 from sns_recommend.seed import AUTHORS, POSTS, TOPICS, USERNAMES, post_fields, topic_of
 
 
-def test_four_authors_per_topic_and_three_readers():
+def test_four_authors_per_topic_five_readers_and_a_newcomer():
     assert len(set(USERNAMES.values())) == len(USERNAMES) == 30
     assert Counter(topic_of(author) for author in AUTHORS) == dict.fromkeys(TOPICS, 4)
     assert set(USERNAMES) - set(AUTHORS) == {7, 8, 9, 17, 18, 19}
