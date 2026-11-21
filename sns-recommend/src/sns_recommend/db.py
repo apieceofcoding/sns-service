@@ -9,15 +9,20 @@ from .config import settings
 
 @contextmanager
 def source_connection():
-    with psycopg.connect(settings().source_database_url, row_factory=dict_row) as conn:
+    """SNS database. Its timestamps carry no zone, so every session reads them as UTC."""
+    with psycopg.connect(
+        settings().source_database_url, row_factory=dict_row, options="-c timezone=UTC"
+    ) as conn:
         yield conn
 
 
 def initialize():
     root = Path(__file__).resolve().parents[2]
-    # Reuse the app schema rather than maintaining a second users/posts definition.
-    ddl = (root.parent / "sns-app/src/main/resources/ddl.sql").read_text()
-    ddl = ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
-    ddl = ddl.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ")
     with source_connection() as conn:
-        conn.execute(ddl)
+        # Reuse the app schema rather than maintaining a second users/posts definition.
+        app_ddl = root.parent / "sns-app/src/main/resources/ddl.sql"
+        if app_ddl.is_file():
+            ddl = app_ddl.read_text()
+            ddl = ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
+            ddl = ddl.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ")
+            conn.execute(ddl)
