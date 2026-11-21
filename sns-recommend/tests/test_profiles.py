@@ -31,7 +31,7 @@ def test_user_vector_is_computed_without_state_writes(
     monkeypatch.setattr(
         profiles.source,
         "current_versions",
-        lambda ids: {i: 2 if case == "stale" else 1 for i in ids},
+        lambda ids: dict.fromkeys(ids, 2 if case == "stale" else 1),
     )
     monkeypatch.setattr(profiles, "embedding_model", lambda: "test:2")
 
