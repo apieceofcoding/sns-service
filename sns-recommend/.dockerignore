@@ -6,7 +6,6 @@
 .idea
 *.iml
 dist
-models
 reports
 __pycache__
 .pytest_cache
