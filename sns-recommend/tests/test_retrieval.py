@@ -86,7 +86,7 @@ def test_merge_without_user_vector_uses_latest_and_popular_only(candidates_from)
 def test_merge_returns_every_post_when_fewer_than_k(candidates_from):
     posts = [post(i) for i in range(1, 6)]
 
-    found = candidates_from(posts, {i: 0.5 for i in range(1, 6)})
+    found = candidates_from(posts, dict.fromkeys(range(1, 6), 0.5))
 
     assert sorted(p["id"] for p in found) == [1, 2, 3, 4, 5]
 

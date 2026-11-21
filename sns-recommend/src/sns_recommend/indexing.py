@@ -17,17 +17,13 @@ def posts_needing_index(rows):
                 ([post["id"] for post in rows],),
             ).fetchall()
         }
+    model = embedding_model()
     needed = []
     for post in rows:
         row = stored.get(post["id"])
-        if post["visible"]:
-            if (
-                not row
-                or row["content_version"] != post["version"]
-                or row["model"] != embedding_model()
-            ):
-                needed.append(post["id"])
-        elif row:
+        current = bool(row) and (row["content_version"], row["model"]) == (post["version"], model)
+        # A visible post needs a current vector. A hidden post needs its vector removed.
+        if (post["visible"] and not current) or (not post["visible"] and row):
             needed.append(post["id"])
     return needed
 

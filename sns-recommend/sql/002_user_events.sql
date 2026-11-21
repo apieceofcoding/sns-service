@@ -11,5 +11,3 @@ CREATE TABLE IF NOT EXISTS user_events (
  UNIQUE(source_id,action)
 );
 CREATE INDEX IF NOT EXISTS user_events_history ON user_events(user_id,occurred_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS user_events_pending_request
- ON user_events(user_id) WHERE action='recommend.requested' AND processed_at IS NULL;
