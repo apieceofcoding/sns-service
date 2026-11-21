@@ -15,7 +15,7 @@ def health():
 
 
 @app.get("/internal/feeds/{user_id}")
-def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None = None):
+def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None = Query(None, max_length=512)):
     try:
         excluded = excluded_ids(user_id)
         # Deleted posts are checked in the SNS database for this page.
