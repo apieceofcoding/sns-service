@@ -36,4 +36,4 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: requires course PostgreSQL and Redis"]
+markers = ["integration: requires course PostgreSQL"]
