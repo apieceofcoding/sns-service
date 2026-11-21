@@ -1,8 +1,7 @@
 from datetime import UTC, datetime
 
-from sns_recommend.post_examples import post_body, post_created_at
-
 from .db import source_connection
+from .post_examples import post_body, post_created_at
 
 TOPICS = ("backend", "travel", "fitness", "ai_dev", "travel_video", "fitness_food")
 POSTS = 1200
@@ -66,7 +65,6 @@ def seed():
                 VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                 (user_id, username, now, now),
             )
-
         for i in range(1, POSTS + 1):
             author_id, body = post_fields(i)
             existing = conn.execute("SELECT user_id FROM posts WHERE id=%s", (i,)).fetchone()
