@@ -119,7 +119,7 @@ def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.T
             batch["history"][row, offset + j] = index[post_id]
             batch["actions"][row, offset + j] = ACTIONS[action]
             batch["history_age"][row, offset + j] = days(session["start"] - at)
-        kept = [(c, y) for c, y in zip(session["candidates"], session["labels"]) if c in index]
+        kept = [(c, y) for c, y in zip(session["candidates"], session["labels"], strict=True) if c in index]
         for j, (post_id, label) in enumerate(kept[:CANDIDATES]):
             batch["candidates"][row, j] = index[post_id]
             batch["candidate_age"][row, j] = days(

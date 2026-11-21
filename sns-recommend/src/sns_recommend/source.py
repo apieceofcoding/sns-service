@@ -1,5 +1,7 @@
 """Reads from the SNS database. Posts and accounts stay there and are never copied."""
 
+from datetime import timedelta
+
 from .db import source_connection
 
 # A feed candidate is an original post: not deleted, not a reply and not a repost.
@@ -53,8 +55,6 @@ def current_versions(post_ids):
 
 
 def recent_posts(user_id, reference, hours=48):
-    from datetime import timedelta
-
     with source_connection() as conn:
         return conn.execute(
             f"""SELECT id,user_id AS author_id,content AS body,
