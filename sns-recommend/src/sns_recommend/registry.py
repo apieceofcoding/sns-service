@@ -57,9 +57,8 @@ def rollback() -> dict:
 
 def versions(limit: int = 10) -> list[dict]:
     with connection() as conn:
-        rows = conn.execute(
+        return conn.execute(
             """SELECT id,status,trained_until,sessions,metrics->'ndcg@10' AS ndcg,
             created_at,activated_at FROM model_versions ORDER BY id DESC LIMIT %s""",
             (limit,),
         ).fetchall()
-    return rows
