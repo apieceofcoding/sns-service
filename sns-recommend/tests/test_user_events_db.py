@@ -203,7 +203,7 @@ def test_new_embedding_space_indexes_every_post_again(monkeypatch: pytest.Monkey
 
 def test_simulated_readers_become_events_once() -> None:
     result = simulator.simulate(users=5, sessions=3, hours=2)
-    assert result["readers"] == 8 and result["impressions"] > 0
+    assert result["readers"] == len(simulator.READERS) + 5 and result["impressions"] > 0
     with source_connection() as conn:
         shown = conn.execute(
             "SELECT count(*) AS n FROM post_actions WHERE action='impression'"
