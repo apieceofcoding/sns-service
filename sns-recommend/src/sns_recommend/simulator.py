@@ -107,6 +107,22 @@ def write(impressions: list, actions: list, likes: list) -> None:
             )
 
 
+def publish_posts(count: int) -> int:
+    """Authors write `count` new posts now, continuing the seed's author and body pattern."""
+    now = datetime.now(UTC)
+    with source_connection() as conn:
+        first = conn.execute("SELECT max(id)+1 AS next FROM posts").fetchone()["next"]
+        for post_id in range(first, first + count):
+            author_id, body = post_fields(post_id)
+            conn.execute(
+                """INSERT INTO posts(id,user_id,content,like_count,repost_count,reply_count,
+                view_count,created_at,modified_at) VALUES (%s,%s,%s,0,0,0,0,%s,%s)""",
+                (post_id, author_id, body, now, now),
+            )
+        advance_identity(conn, "posts")
+    return count
+
+
 def simulate(users: int = 300, sessions: int = 15, hours: float = 4, shift: bool = False):
     """Readers see random recent posts in past time slots. Used to collect training data."""
     now = datetime.now(UTC)

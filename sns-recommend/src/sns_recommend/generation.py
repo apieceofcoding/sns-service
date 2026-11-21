@@ -34,7 +34,7 @@ def run(event: dict) -> dict:
     created_at = datetime.now(UTC).timestamp()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
     ranked = order(user_id, candidates)
-    published = publish_if_owner(event, ranked["ids"], ranked, generation, created_at)
+    published = publish_if_owner(event, ranked, generation, created_at)
     if not finish(event):
         raise RuntimeError("event lease lost")
     return {
@@ -63,7 +63,7 @@ def order(user_id: int, candidates: list[dict]) -> dict:
     return {**ranked, "experiment": group.get("experiment"), "arm": group.get("arm")}
 
 
-def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
+def publish_if_owner(event, ranked, generation, created_at) -> bool:
     """Publish only while this worker still owns the request."""
     with connection() as conn:
         row = conn.execute(
@@ -79,7 +79,7 @@ def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
             return False
         return publish(
             event["user_id"],
-            ids,
+            ranked["ids"],
             ranked["strategy"],
             generation,
             str(event["id"]),
