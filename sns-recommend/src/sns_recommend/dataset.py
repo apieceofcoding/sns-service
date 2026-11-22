@@ -18,14 +18,13 @@ ACTIONS = {action: i + 1 for i, action in enumerate(POSITIVE)}
 LABELS = ("click", "like")
 
 
-def load_events(until: datetime | None = None) -> list[dict]:
+def load_events() -> list[dict]:
     with connection() as conn:
         return conn.execute(
             """SELECT user_id,post_id,action,occurred_at FROM user_events
             WHERE action=ANY(%s) AND removed_at IS NULL
-            AND (%s::timestamptz IS NULL OR occurred_at<=%s)
             ORDER BY user_id,occurred_at,post_id""",
-            (["impression", *POSITIVE], until, until),
+            (["impression", *POSITIVE],),
         ).fetchall()
 
 

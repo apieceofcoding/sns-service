@@ -29,7 +29,6 @@ def active() -> dict | None:
 
 def promote(version: int) -> dict:
     with connection() as conn:
-        conn.execute("LOCK TABLE model_versions IN SHARE ROW EXCLUSIVE MODE")
         row = conn.execute("SELECT status FROM model_versions WHERE id=%s", (version,)).fetchone()
         if row is None or row["status"] == "rejected":
             raise ValueError("only a trained, accepted version can serve")

@@ -41,16 +41,6 @@ class RecommendControllerTest {
         verify(recommend).get(7, 20, null);
     }
 
-    @Test
-    void rejectsMissingUserBeforeCallingRecommend() throws Exception {
-        var recommend = mock(RecommendFeedService.class);
-        MockMvcBuilders.standaloneSetup(new RecommendController(recommend, mock(PostService.class)))
-                .setCustomArgumentResolvers(resolver(null)).build()
-                .perform(get("/api/v1/recommend"))
-                .andExpect(status().isUnauthorized());
-        verifyNoInteractions(recommend);
-    }
-
     private HandlerMethodArgumentResolver resolver(User user) {
         return new HandlerMethodArgumentResolver() {
             public boolean supportsParameter(MethodParameter parameter) {

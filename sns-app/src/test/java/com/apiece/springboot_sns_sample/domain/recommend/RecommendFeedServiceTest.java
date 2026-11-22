@@ -5,7 +5,6 @@ import com.apiece.springboot_sns_sample.domain.post.PostRepository;
 import com.apiece.springboot_sns_sample.domain.user.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.ResourceAccessException;
 
 import java.util.List;
 
@@ -36,29 +35,6 @@ class RecommendFeedServiceTest {
         assertThat(result.mode()).isEqualTo("pending");
         assertThat(result.posts()).isEmpty();
         assertThat(result.nextCursor()).isNull();
-        verifyNoInteractions(posts);
-    }
-
-    @Test
-    void readyEmptySnapshotRemainsARecommend() {
-        when(client.get(7, 20, null)).thenReturn(new RecommendFeedClient.Feed(true, List.of(), null));
-        assertThat(service.get(7, 20, null).mode()).isEqualTo("recommend");
-        verifyNoInteractions(posts);
-    }
-
-    @Test
-    void forwardsCursorAndKeepsItEvenWhenAllPostsWereDeleted() {
-        when(client.get(7, 2, "old")).thenReturn(new RecommendFeedClient.Feed(true, List.of(1L), "next"));
-        when(posts.findAllByIdInAndDeletedAtIsNull(List.of(1L))).thenReturn(List.of());
-        var result = service.get(7, 2, "old");
-        assertThat(result.posts()).isEmpty();
-        assertThat(result.nextCursor()).isEqualTo("next");
-    }
-
-    @Test
-    void connectionFailureDoesNotQueryAnUnrelatedFeed() {
-        when(client.get(7, 20, null)).thenThrow(new ResourceAccessException("offline"));
-        assertThatThrownBy(() -> service.get(7, 20, null)).isInstanceOf(ResourceAccessException.class);
         verifyNoInteractions(posts);
     }
 

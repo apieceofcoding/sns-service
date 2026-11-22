@@ -46,7 +46,7 @@ def test_the_model_learns_what_the_mean_vector_misses():
 
 
 def test_gate_promotes_only_a_clear_improvement():
-    assert gate({"candidate": 0.70, "embedding": 0.60})[0]
-    assert not gate({"candidate": 0.605, "embedding": 0.60})[0]
-    assert not gate({"candidate": 0.70, "embedding": 0.60, "active": 0.72})[0]
-    assert not gate({"candidate": None, "embedding": 0.60})[0]
+    assert gate({"model": 0.70, "embedding": 0.60})[0]
+    assert not gate({"model": 0.605, "embedding": 0.60})[0]
+    assert not gate({"model": 0.70, "embedding": 0.60, "active": 0.72})[0]
+    assert not gate({"model": None, "embedding": 0.60})[0]

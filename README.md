@@ -154,8 +154,6 @@ uv run sns-recommend-event-worker --once
 curl -fsS -c cookies.txt -X POST http://localhost:8080/api/v1/login -d 'username=recommenddemo&password=recommend1234'
 # 클릭 기록. 같은 행동을 재전송할 때는 같은 eventId 사용
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions -H 'Content-Type: application/json' -d '{"eventId":"03b9e8fe-a243-48b8-9048-11c48ce52001","action":"click","postId":4}'
-# 글을 고치면 버전이 올라가고 다시 임베딩
-uv run sns-recommend source-post --post 1001
 uv run sns-recommend-event-worker --once
 ```
 
@@ -274,11 +272,10 @@ uv sync --locked
 uv run sns-recommend init
 # 추천 worker를 다시 켠 뒤
 uv run sns-recommend generate --user 7
-uv run sns-recommend benchmark --user 7
 curl -fsS http://localhost:8001/metrics
 ```
 
-`benchmark`는 Redis 조회 p95와 목록 나이를, `/metrics`는 최근 생성 시간 p95, 모델, 탐색과 대체 순위의 생성 수, 서비스 중인 모델 버전과 진행 중인 실험을 보여 줍니다. SNS 전체 응답 시간은 포함하지 않아요.
+`/metrics`는 서비스 중인 모델 버전, 진행 중인 실험, 최근 한 시간 동안 보여 준 글 수를 순위 방식(`model`, `explore`, `embedding`)별로 보여 줍니다.
 
 part-5까지는 오프라인 기준만 넘으면 새 모델로 바로 교체했습니다. 오프라인 NDCG는 과거 노출을 얼마나 잘 정렬하는지만 알려 줘요. part-6부터 새 모델은 **후보**로 남고, 실제로 보여 준 피드에서 이겨야 교체됩니다. 독자들은 part-5에서 바뀐 방식 그대로 반응해요. 그 전에 학습한 모델이 서비스 중일 때, 바뀐 뒤의 사용자 이벤트로 학습한 후보가 실제로 더 나은지 확인합니다.
 
@@ -310,15 +307,6 @@ uv run sns-recommend models
 한 독자의 노출은 서로 닮아 있어서, 노출을 하나씩 독립으로 세면 우연한 차이도 의미 있어 보입니다. 결과를 중간에 보고 유리할 때 멈춰도 같은 문제가 생겨요. 그래서 크기를 먼저 정하고 독자 단위로 비교합니다.
 
 피드의 10%는 **탐색**으로 후보를 무작위 순서로 보여 줍니다(`strategy: explore`, `EXPLORE_RATE`). 순위 모델이 고른 글에만 반응이 쌓이면 그 데이터로는 모델을 공정하게 평가할 수 없기 때문이에요. 오프라인 평가와 `monitor`는 순위 모델이 고르지 않은 노출만 씁니다.
-
-```sh
-# 섞기 실험: 같은 모델에서 작성자 섞기를 끈 그룹과 비교
-uv run sns-recommend experiment start --no-spread
-uv run sns-recommend experiment run --rounds 3
-uv run sns-recommend experiment stop
-```
-
-`one_author_share`는 한 번에 보여 준 글 중 가장 많이 나온 작성자의 비율입니다. 섞기를 꺼도 클릭률에 뚜렷한 차이가 없다면, 섞기는 클릭을 잃지 않으면서 한 작성자로 쏠리는 것을 줄인다는 뜻이에요.
 
 `sns-recommend-trainer`는 이 과정을 이어서 실행합니다. 새 데이터가 쌓이면 다시 학습하고, 후보가 생기면 실험을 시작하고, 계획한 노출이 차면 판정해요.
 
@@ -407,5 +395,3 @@ DIMENSIONS=768
 | 순위 트랜스포머 (PyTorch, 직접 학습) | 행동과 후보로 반응 확률 예측 | 파라미터 약 15만 개, 파일 약 600KB |
 
 순위 모델은 GPU 없이 학습합니다. 학습 중 메모리는 1GB 안쪽이고, 사용자 한 명의 후보 30개 점수 계산은 1ms 미만이에요. `fixture` 모드는 자동 검사용 키워드 벡터이며 품질 평가에 사용하지 않습니다. 임베딩 모델을 바꾸면 다시 색인하고, 이전 벡터로 학습한 순위 모델은 쓰지 않아요.
-
-Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 사용합니다. Ollama도 Docker에서 접근할 수 있는 호스트 주소에 리스닝해야 해요. [호스트 설정](https://docs.ollama.com/faq)
