@@ -60,7 +60,6 @@ export default function PostPage({ params }: PostPageProps) {
   const deletePost = useDeletePost()
   const incrementView = useIncrementView()
 
-  // 상세 페이지 진입 시 조회수 증가
   useEffect(() => {
     if (postId) {
       incrementView.mutate(postId)
@@ -90,10 +89,8 @@ export default function PostPage({ params }: PostPageProps) {
     }
   }
 
-  // 답글인 경우 메인 게시물로 스크롤
   useEffect(() => {
     if (post?.parentPost && mainPostRef.current) {
-      // 약간의 지연 후 스크롤 (렌더링 완료 후)
       setTimeout(() => {
         mainPostRef.current?.scrollIntoView({ behavior: "instant", block: "start" })
       }, 100)
@@ -151,7 +148,6 @@ export default function PostPage({ params }: PostPageProps) {
       <Sidebar />
       <div className="flex-1 flex justify-center">
         <main className="w-full max-w-2xl border-x border-border">
-          {/* 헤더 */}
           <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border">
             <div className="flex items-center gap-6 px-4 py-3">
               <Button
@@ -166,7 +162,6 @@ export default function PostPage({ params }: PostPageProps) {
             </div>
           </div>
 
-          {/* 부모 게시물 (답글인 경우) */}
           {post.parentPost && (
             <article
               className="border-b border-border hover:bg-accent/30 transition-colors cursor-pointer"
@@ -199,13 +194,11 @@ export default function PostPage({ params }: PostPageProps) {
                     </Button>
                   </div>
                   <p className="leading-relaxed whitespace-pre-wrap mb-3">{post.parentPost.content}</p>
-                  {/* 부모 게시물 미디어 */}
                   {post.parentPost.mediaIds && post.parentPost.mediaIds.length > 0 && (
                     <div className="mb-3">
                       <MediaGallery mediaIds={post.parentPost.mediaIds} />
                     </div>
                   )}
-                  {/* 부모 게시물 액션 버튼 */}
                   <div className="flex items-center gap-6 -ml-2 text-muted-foreground">
                     <Button
                       variant="ghost"
@@ -248,10 +241,8 @@ export default function PostPage({ params }: PostPageProps) {
             </article>
           )}
 
-          {/* 메인 게시물 (상세) */}
           <article ref={mainPostRef} className="border-b border-border">
             <div className="p-4">
-              {/* 작성자 정보 */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <ProfileAvatar
@@ -282,17 +273,14 @@ export default function PostPage({ params }: PostPageProps) {
                 </DropdownMenu>
               </div>
 
-              {/* 본문 */}
               <p className="text-xl leading-relaxed whitespace-pre-wrap mb-4">{post.content}</p>
 
-              {/* 미디어 */}
               {post.mediaIds && post.mediaIds.length > 0 && (
                 <div className="mb-4">
                   <MediaGallery mediaIds={post.mediaIds} />
                 </div>
               )}
 
-              {/* 인용된 트윗 */}
               {post.quotedPost && (
                 <QuotedTweetCard
                   post={post.quotedPost}
@@ -300,7 +288,6 @@ export default function PostPage({ params }: PostPageProps) {
                 />
               )}
 
-              {/* 시간 */}
               <div className="flex items-center gap-1 text-muted-foreground text-sm py-4 border-b border-border">
                 <span>{formattedTime}</span>
                 <span>·</span>
@@ -310,7 +297,6 @@ export default function PostPage({ params }: PostPageProps) {
                 <span>조회수</span>
               </div>
 
-              {/* 상세 통계 */}
               <div className="flex items-center gap-4 py-4 border-b border-border text-sm">
                 <button className="hover:underline">
                   <span className="font-bold">{post.repostCount}</span>
@@ -326,7 +312,6 @@ export default function PostPage({ params }: PostPageProps) {
                 </button>
               </div>
 
-              {/* 액션 버튼 (상세) */}
               <div className="flex items-center justify-around py-2 border-b border-border">
                 <Button
                   variant="ghost"
@@ -371,7 +356,6 @@ export default function PostPage({ params }: PostPageProps) {
               </div>
             </div>
 
-            {/* 답글 작성 */}
             <div className="p-4 border-b border-border">
               <div className="flex gap-3">
                 <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
@@ -396,7 +380,6 @@ export default function PostPage({ params }: PostPageProps) {
             </div>
           </article>
 
-          {/* 답글 목록 */}
           <div>
             {repliesLoading && (
               <div className="flex items-center justify-center p-8">
@@ -439,14 +422,12 @@ export default function PostPage({ params }: PostPageProps) {
         </aside>
       </div>
 
-      {/* 인용 다이얼로그 */}
       <QuoteDialog
         post={post}
         open={quoteDialogOpen}
         onOpenChange={setQuoteDialogOpen}
       />
 
-      {/* 삭제 확인 다이얼로그 */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -1,5 +1,3 @@
-"""Deterministic fictional posts for the course, without external model calls."""
-
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -261,7 +259,6 @@ POSTS: dict[str, tuple[str, ...]] = {
 
 
 def post_body(topic: str, ordinal: int) -> str:
-    """40 fixed examples per topic. Later ordinals join two different examples."""
     posts = POSTS[topic]
     extra = ordinal // len(posts)
     if not 0 <= extra < len(posts):
@@ -269,12 +266,10 @@ def post_body(topic: str, ordinal: int) -> str:
     first = posts[ordinal % len(posts)]
     if extra == 0:
         return first
-    # 7 shares no factor with 40, so every ordinal pairs a sentence with a different one.
     return f"{first} {posts[(ordinal + 7 * extra) % len(posts)]}"
 
 
 def post_created_at(post_id: int, reference: datetime, group_size: int = 5) -> datetime:
-    """Include both inclusive 48-hour boundaries and future-post rejection cases."""
     if group_size < 1 or post_id < 1:
         raise ValueError("post id and group size must be positive")
     if reference.utcoffset() is None:

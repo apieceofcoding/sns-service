@@ -4,7 +4,7 @@ from sns_recommend.dataset import CANDIDATES, HISTORY
 from sns_recommend.model import Ranker, load, save, score
 
 TABLE = torch.randn(10, 8, generator=torch.Generator().manual_seed(0))
-TABLE[0] = 0  # padding
+TABLE[0] = 0
 
 
 def batch(candidates, history=(1, 2)):

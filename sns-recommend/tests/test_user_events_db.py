@@ -1,5 +1,3 @@
-"""Runs against disposable databases only: it deletes every row in the tables it uses."""
-
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
@@ -30,7 +28,7 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("SNS_TEST_DISPOSABLE_DB"), reason="needs disposable databases"
 )
 READER = 7
-POSTS = 240  # A fifth of the course data keeps these tests quick.
+POSTS = 240
 
 
 def rows(action: str, user_id: int = READER) -> list[dict]:
@@ -158,7 +156,6 @@ def test_post_changes_are_indexed_by_version_and_like_count_is_ignored() -> None
 
 
 def age_source_rows() -> None:
-    """Move every row out of the overlap window, as if it changed long ago."""
     with source_connection() as conn:
         conn.execute("UPDATE posts SET modified_at=modified_at-interval '1 hour'")
         conn.execute("UPDATE likes SET modified_at=modified_at-interval '1 hour'")

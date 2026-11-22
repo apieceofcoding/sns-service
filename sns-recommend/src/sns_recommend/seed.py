@@ -5,8 +5,6 @@ from .post_examples import post_body, post_created_at
 
 TOPICS = ("backend", "travel", "fitness", "ai_dev", "travel_video", "fitness_food")
 POSTS = 1200
-# Four authors write about each topic. Readers 7, 8, 9, 17 and 18 only read.
-# 19 just signed up: no posts and no reactions yet.
 USERNAMES = {
     1: "minjun_dev",
     2: "jiwoo_trip",
@@ -47,7 +45,6 @@ def topic_of(author_id: int) -> str:
 
 
 def post_fields(post_id: int) -> tuple[int, str]:
-    """Author and body of a course post, decided by its ID alone."""
     group = (post_id - 1) // len(TOPICS)
     author_id = 1 + (post_id - 1) % len(TOPICS) + 10 * (group % 4)
     return author_id, post_body(topic_of(author_id), group)
@@ -88,7 +85,6 @@ def seed():
 
 
 def advance_identity(conn, *tables):
-    # Explicit IDs must not collide with the app's next generated ID.
     for table in tables:
         conn.execute(f"""SELECT setval(pg_get_serial_sequence('{table}', 'id'),
             GREATEST((SELECT max(id) FROM {table}),

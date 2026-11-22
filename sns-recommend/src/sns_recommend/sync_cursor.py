@@ -1,10 +1,7 @@
-"""Where the event worker stopped reading each SNS table."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-# A slow transaction can commit after newer rows were read, so recent rows are read again.
 OVERLAP = timedelta(seconds=60)
 START = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -21,7 +18,6 @@ def settled_before(source):
 
 
 def next_position(rows, current, settled):
-    """Move past rows that can no longer change order. Never skip the overlap window."""
     if rows and rows[-1]["changed_at"] < settled:
         return rows[-1]["changed_at"], rows[-1]["source_id"]
     return (settled, 0) if settled > current[0] else current

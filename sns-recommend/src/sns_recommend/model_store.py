@@ -1,5 +1,3 @@
-"""The model the worker serves: the file that training wrote last."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +19,6 @@ def active_model() -> tuple[Ranker | None, str | None]:
             model, info = load(path)
         except (OSError, RuntimeError, KeyError):
             return None, None
-        # A model trained on other vectors cannot read today's vectors.
         usable = info.get("embedding_model") == embedding_model()
         _cache.update(key=key, model=model if usable else None, version=info["trained_until"])
     if _cache["model"] is None:

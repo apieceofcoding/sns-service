@@ -40,7 +40,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
     }
   }, [hasNext, isAnimating])
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
@@ -60,7 +59,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [onClose, goToPrev, goToNext])
 
-  // Prevent body scroll
   useEffect(() => {
     const originalStyle = window.getComputedStyle(document.body).overflow
     document.body.style.overflow = "hidden"
@@ -69,7 +67,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
     }
   }, [])
 
-  // Touch/Mouse handlers for swipe
   const handleDragStart = (clientX: number, clientY: number) => {
     setIsDragging(true)
     startXRef.current = clientX
@@ -141,7 +138,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Header */}
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4 z-10">
         <button
           onClick={onClose}
@@ -156,10 +152,9 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
           </div>
         )}
 
-        <div className="w-10" /> {/* Spacer for centering */}
+        <div className="w-10" />
       </div>
 
-      {/* Navigation arrows */}
       {hasMultiple && hasPrev && (
         <button
           onClick={(e) => {
@@ -184,7 +179,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
         </button>
       )}
 
-      {/* Image container */}
       <div
         className="w-full h-full flex items-center justify-center p-16 select-none"
         onTouchStart={handleTouchStart}
@@ -210,7 +204,6 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
         </div>
       </div>
 
-      {/* Bottom dots indicator */}
       {hasMultiple && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
           {images.map((_, index) => (

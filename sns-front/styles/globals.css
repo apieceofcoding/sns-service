@@ -3,16 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* X (Twitter) Style Dark Theme */
 :root {
-  /* X uses a very dark background - #000000 */
   --background: #000000;
   --foreground: #e7e9ea;
   --card: #000000;
   --card-foreground: #e7e9ea;
   --popover: #16181c;
   --popover-foreground: #e7e9ea;
-  /* X Blue accent */
   --primary: #1d9bf0;
   --primary-foreground: #ffffff;
   --secondary: #16181c;
@@ -42,7 +39,6 @@
   --sidebar-ring: #1d9bf0;
 }
 
-/* Light mode - X dim style */
 .light {
   --background: #ffffff;
   --foreground: #0f1419;

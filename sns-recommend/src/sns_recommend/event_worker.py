@@ -14,7 +14,6 @@ from .sync_cursor import load_position, next_position, save_position, settled_be
 
 logger = logging.getLogger(__name__)
 BATCH_SIZE = 1000
-# Changed rows per SNS table, oldest first. Each source row becomes one user_events row.
 ACTION_SOURCES = (
     (
         "likes",
@@ -36,7 +35,6 @@ ACTION_SOURCES = (
     ),
     (
         "post_actions",
-        # Read by arrival time. A late event keeps its original time but is not skipped.
         """SELECT action,user_id,post_id,
         created_at AS occurred_at,NULL::timestamptz AS removed_at,
         recorded_at AS changed_at,id AS source_id
@@ -44,15 +42,12 @@ ACTION_SOURCES = (
         ORDER BY recorded_at,id LIMIT %s""",
     ),
 )
-# These actions change what the user is interested in, so the list should be rebuilt.
 REFRESH_ACTIONS = {"like", "reply", "repost", "click"}
 
 
 def sync_source(name, query):
-    """Copy changed rows until a batch has news. Events and the cursor commit together."""
     with connection() as conn:
         position = load_position(conn, name)
-    # The saved cursor stays behind the overlap window, but reading must still move through it.
     reading = position
     while True:
         with source_connection() as source:
@@ -93,14 +88,12 @@ def sync_events() -> int:
 
 
 def poll_once() -> dict[str, int]:
-    # A model failure in indexing must not hold back recorded actions, so it runs last.
     events = sync_events()
     indexed = index_changes()["indexed"]
     return {"processed": events + indexed, "events": events, "indexed": indexed}
 
 
 def drain() -> dict[str, int]:
-    """Process until nothing is left. Used by --once and by the course steps."""
     total: dict[str, int] = {}
     while True:
         result = poll_once()

@@ -17,17 +17,13 @@ export function useRepost() {
 
   return useMutation({
     mutationFn: (postId: number) => repostsApi.create({ postId }),
-    // Optimistic update
     onMutate: async (postId) => {
-      // 진행 중인 리페치 취소
       await queryClient.cancelQueries({ queryKey: ['posts'] })
       await queryClient.cancelQueries({ queryKey: ['timeline'] })
 
-      // 이전 데이터 백업
       const previousPosts = queryClient.getQueryData(['posts'])
       const previousTimeline = queryClient.getQueryData(['timeline'])
 
-      // 즉시 UI 업데이트 (리포스트 +1)
       const updatePost = (post: Post) => {
         if (post.id === postId) {
           return {
@@ -49,7 +45,6 @@ export function useRepost() {
       return { previousPosts, previousTimeline }
     },
     onError: (error, postId, context) => {
-      // 에러 시 롤백
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -63,7 +58,6 @@ export function useRepost() {
       toast.success('리포스트했습니다!')
     },
     onSettled: () => {
-      // 최종적으로 서버 데이터로 갱신
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
     },
@@ -75,17 +69,13 @@ export function useUnrepost() {
 
   return useMutation({
     mutationFn: ({ repostId }: { postId: number; repostId: number }) => repostsApi.delete(repostId),
-    // Optimistic update
     onMutate: async ({ postId }) => {
-      // 진행 중인 리페치 취소
       await queryClient.cancelQueries({ queryKey: ['posts'] })
       await queryClient.cancelQueries({ queryKey: ['timeline'] })
 
-      // 이전 데이터 백업
       const previousPosts = queryClient.getQueryData(['posts'])
       const previousTimeline = queryClient.getQueryData(['timeline'])
 
-      // 즉시 UI 업데이트 (리포스트 -1)
       const updatePost = (post: Post) => {
         if (post.id === postId) {
           return {
@@ -107,7 +97,6 @@ export function useUnrepost() {
       return { previousPosts, previousTimeline }
     },
     onError: (error, variables, context) => {
-      // 에러 시 롤백
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -121,7 +110,6 @@ export function useUnrepost() {
       toast.success('리포스트를 취소했습니다!')
     },
     onSettled: () => {
-      // 최종적으로 서버 데이터로 갱신
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
     },

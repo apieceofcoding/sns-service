@@ -2,7 +2,6 @@
 
 BASE_URL="http://localhost:8080"
 
-# Initialize Media Upload (IMAGE)
 echo "=== Initialize Media Upload (IMAGE) ==="
 RESPONSE=$(curl -X POST "${BASE_URL}/api/v1/media/init" \
   -H "Content-Type: application/json" \
@@ -17,8 +16,6 @@ echo "$RESPONSE"
 PRESIGNED_URL=$(echo "$RESPONSE" | grep -o '"presignedUrl":"[^"]*"' | cut -d'"' -f4)
 echo "Presigned URL: $PRESIGNED_URL"
 
-# Upload image to presigned URL (example with test image)
-# Replace /path/to/image.jpg with your actual image path
 echo -e "\n=== Upload Image to Presigned URL ==="
 echo "To upload an image, use:"
 echo "curl -X PUT \"\$PRESIGNED_URL\" -H \"Content-Type: image/jpeg\" --data-binary @/path/to/image.jpg"
@@ -30,7 +27,6 @@ echo "# curl -X PUT \"\$PRESIGNED_URL\" -H \"Content-Type: image/jpeg\" --data-b
 
 echo -e "\n\n"
 
-# Initialize Media Upload (VIDEO)
 echo -e "\n=== Initialize Media Upload (VIDEO) ==="
 VIDEO_RESPONSE=$(curl -X POST "${BASE_URL}/api/v1/media/init" \
   -H "Content-Type: application/json" \
@@ -45,14 +41,12 @@ echo "$VIDEO_RESPONSE"
 VIDEO_PRESIGNED_URL=$(echo "$VIDEO_RESPONSE" | grep -o '"presignedUrl":"[^"]*"' | cut -d'"' -f4)
 echo "Video Presigned URL: $VIDEO_PRESIGNED_URL"
 
-# Upload video to presigned URL
 echo -e "\n=== Upload Video to Presigned URL ==="
 echo "To upload a video with Host header:"
 echo "curl -X PUT \"\$VIDEO_PRESIGNED_URL\" -H \"Content-Type: video/mp4\" -H \"Host: localhost:9000\" --data-binary @/path/to/video.mp4"
 
 echo -e "\n\n"
 
-# Initialize Media Upload (VIDEO - Multipart, Large file)
 echo -e "\n=== Initialize Media Upload (VIDEO - Multipart) ==="
 MULTIPART_RESPONSE=$(curl -X POST "${BASE_URL}/api/v1/media/init" \
   -H "Content-Type: application/json" \
@@ -66,7 +60,6 @@ MULTIPART_RESPONSE=$(curl -X POST "${BASE_URL}/api/v1/media/init" \
 echo "$MULTIPART_RESPONSE"
 echo ""
 
-# Upload video to presigned URL (Multipart)
 echo -e "\n=== Upload Video to Presigned URL (Multipart) ==="
 echo "For multipart upload (files > 8MB):"
 echo "1. Extract uploadId and presignedUrlParts from the response"
@@ -81,7 +74,6 @@ echo "5. Call /api/v1/media/uploaded with the mediaId and all part ETags"
 
 echo -e "\n\n"
 
-# Mark Media as Uploaded (Single Upload)
 echo "=== Mark Media as Uploaded - Single Upload (ID=1) ==="
 curl -X POST "${BASE_URL}/api/v1/media/uploaded" \
   -H "Content-Type: application/json" \
@@ -93,7 +85,6 @@ curl -X POST "${BASE_URL}/api/v1/media/uploaded" \
 
 echo -e "\n\n"
 
-# Mark Media as Uploaded (Multipart Upload)
 echo "=== Mark Media as Uploaded - Multipart Upload (ID=2) ==="
 curl -X POST "${BASE_URL}/api/v1/media/uploaded" \
   -H "Content-Type: application/json" \
@@ -119,28 +110,24 @@ curl -X POST "${BASE_URL}/api/v1/media/uploaded" \
 
 echo -e "\n\n"
 
-# Get Media by ID
 echo "=== Get Media by ID (ID=1) ==="
 curl -X GET "${BASE_URL}/api/v1/media/1" \
   -v
 
 echo -e "\n\n"
 
-# Get Presigned URL for Media
 echo "=== Get Presigned URL for Media (ID=1) ==="
 curl -X GET "${BASE_URL}/api/v1/media/1/presigned-url" \
   -v
 
 echo -e "\n\n"
 
-# Get Media by User ID
 echo "=== Get Media by User ID (User ID=1) ==="
 curl -X GET "${BASE_URL}/api/v1/users/1/media" \
   -v
 
 echo -e "\n\n"
 
-# Delete Media
 echo "=== Delete Media (ID=1) ==="
 curl -X DELETE "${BASE_URL}/api/v1/media/1" \
   -b cookies.txt \

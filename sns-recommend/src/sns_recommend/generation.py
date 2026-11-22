@@ -1,5 +1,3 @@
-"""One recommendation run: retrieve, rank, filter and spread, then publish."""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -32,7 +30,6 @@ def generate(event: dict) -> dict:
 
 
 def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
-    """Publish only while this worker still owns the request."""
     with connection() as conn:
         row = conn.execute(
             "SELECT claim_id,processed_at,locked_until FROM user_events WHERE id=%s FOR UPDATE",
