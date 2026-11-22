@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from datetime import UTC, datetime
 
-from .dataset import HISTORY, LABELS, POSITIVE, encode, post_features
+from .dataset import HISTORY, LABELS, POSITIVE, encode, history_before, post_features
 from .db import connection
 from .model import score
 from .model_store import serving_model
@@ -13,10 +13,12 @@ def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
     with connection() as conn:
         rows = conn.execute(
             """SELECT post_id,action,occurred_at FROM user_events WHERE user_id=%s
-            AND action=ANY(%s) AND removed_at IS NULL ORDER BY occurred_at DESC LIMIT %s""",
+            AND action=ANY(%s) AND removed_at IS NULL
+            ORDER BY occurred_at DESC,post_id DESC LIMIT %s""",
             (user_id, list(POSITIVE), HISTORY),
         ).fetchall()
-    return [(r["post_id"], r["action"], r["occurred_at"]) for r in reversed(rows)]
+    # Same rule as training: the last reactions before now, oldest first.
+    return history_before(list(reversed(rows)), datetime.now(UTC))
 
 
 def rank(user_id: int, candidates: list[dict]) -> dict:
