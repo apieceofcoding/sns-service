@@ -17,19 +17,15 @@ export function useLikePost() {
 
   return useMutation({
     mutationFn: (postId: number) => likesApi.create({ postId }),
-    // Optimistic update
     onMutate: async (postId) => {
-      // 진행 중인 리페치 취소
       await queryClient.cancelQueries({ queryKey: ['posts'] })
       await queryClient.cancelQueries({ queryKey: ['timeline'] })
       await queryClient.cancelQueries({ queryKey: ['posts', postId] })
 
-      // 이전 데이터 백업
       const previousPosts = queryClient.getQueryData(['posts'])
       const previousTimeline = queryClient.getQueryData(['timeline'])
       const previousPost = queryClient.getQueryData(['posts', postId])
 
-      // 즉시 UI 업데이트 (좋아요 +1)
       const updatePost = (post: Post) => {
         if (post.id === postId) {
           return {
@@ -47,7 +43,6 @@ export function useLikePost() {
       queryClient.setQueryData(['timeline'], (old: Post[] | undefined) =>
         old?.map(updatePost)
       )
-      // 단일 post 쿼리도 업데이트
       queryClient.setQueryData(['posts', postId], (old: Post | undefined) =>
         old ? { ...old, likeCount: old.likeCount + 1, isLikedByMe: true } : old
       )
@@ -55,7 +50,6 @@ export function useLikePost() {
       return { previousPosts, previousTimeline, previousPost, postId }
     },
     onSuccess: (data, postId, context) => {
-      // 서버에서 받은 likeId를 캐시에 업데이트
       const updatePostWithLikeId = (post: Post) => {
         if (post.id === postId) {
           return {
@@ -72,13 +66,11 @@ export function useLikePost() {
       queryClient.setQueryData(['timeline'], (old: Post[] | undefined) =>
         old?.map(updatePostWithLikeId)
       )
-      // 단일 post 쿼리도 업데이트
       queryClient.setQueryData(['posts', postId], (old: Post | undefined) =>
         old ? { ...old, likeIdByMe: data.id } : old
       )
     },
     onError: (error, postId, context) => {
-      // 에러 시 롤백
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -92,7 +84,6 @@ export function useLikePost() {
       console.error('Like post error:', error)
     },
     onSettled: (data, error, postId) => {
-      // 최종적으로 서버 데이터로 갱신
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
       queryClient.invalidateQueries({ queryKey: ['posts', postId] })
@@ -106,19 +97,15 @@ export function useUnlikePost() {
 
   return useMutation({
     mutationFn: ({ likeId }: { postId: number; likeId: number }) => likesApi.delete(likeId),
-    // Optimistic update
     onMutate: async ({ postId }: { postId: number; likeId: number }) => {
-      // 진행 중인 리페치 취소
       await queryClient.cancelQueries({ queryKey: ['posts'] })
       await queryClient.cancelQueries({ queryKey: ['timeline'] })
       await queryClient.cancelQueries({ queryKey: ['posts', postId] })
 
-      // 이전 데이터 백업
       const previousPosts = queryClient.getQueryData(['posts'])
       const previousTimeline = queryClient.getQueryData(['timeline'])
       const previousPost = queryClient.getQueryData(['posts', postId])
 
-      // 즉시 UI 업데이트 (좋아요 -1)
       const updatePost = (post: Post) => {
         if (post.id === postId) {
           return {
@@ -137,7 +124,6 @@ export function useUnlikePost() {
       queryClient.setQueryData(['timeline'], (old: Post[] | undefined) =>
         old?.map(updatePost)
       )
-      // 단일 post 쿼리도 업데이트
       queryClient.setQueryData(['posts', postId], (old: Post | undefined) =>
         old ? { ...old, likeCount: Math.max(0, old.likeCount - 1), isLikedByMe: false, likeIdByMe: null } : old
       )
@@ -145,7 +131,6 @@ export function useUnlikePost() {
       return { previousPosts, previousTimeline, previousPost, postId }
     },
     onError: (error, variables, context) => {
-      // 에러 시 롤백
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -159,7 +144,6 @@ export function useUnlikePost() {
       console.error('Unlike post error:', error)
     },
     onSettled: (data, error, variables) => {
-      // 최종적으로 서버 데이터로 갱신
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
       queryClient.invalidateQueries({ queryKey: ['posts', variables.postId] })

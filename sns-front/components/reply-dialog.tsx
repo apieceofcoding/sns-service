@@ -119,11 +119,9 @@ export function ReplyDialog({ post, open, onOpenChange }: ReplyDialogProps) {
         </DialogHeader>
 
         <div className="p-4">
-          {/* 원본 트윗 */}
           <div className="flex gap-3">
             <div className="flex flex-col items-center">
               <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
-              {/* 스레드 연결선 */}
               <div className="w-0.5 flex-1 bg-border mt-2 min-h-[20px]" />
             </div>
             <div className="flex-1 min-w-0 pb-4">
@@ -141,7 +139,6 @@ export function ReplyDialog({ post, open, onOpenChange }: ReplyDialogProps) {
             </div>
           </div>
 
-          {/* 답글 작성 영역 */}
           <div className="flex gap-3 mt-2">
             <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
             <div className="flex-1 min-w-0">
@@ -153,7 +150,6 @@ export function ReplyDialog({ post, open, onOpenChange }: ReplyDialogProps) {
                 autoFocus
               />
 
-              {/* 미디어 프리뷰 */}
               {uploadingMedia.length > 0 && (
                 <div className={`grid gap-2 mt-3 ${
                   uploadingMedia.length === 1 ? 'grid-cols-1' :
@@ -187,7 +183,6 @@ export function ReplyDialog({ post, open, onOpenChange }: ReplyDialogProps) {
                           />
                         )}
 
-                        {/* 업로드 진행 상태 오버레이 */}
                         {media.status === 'uploading' && (
                           <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
                             <Loader2 className="w-6 h-6 text-white animate-spin mb-2" />
@@ -196,14 +191,12 @@ export function ReplyDialog({ post, open, onOpenChange }: ReplyDialogProps) {
                           </div>
                         )}
 
-                        {/* 에러 상태 오버레이 */}
                         {media.status === 'error' && (
                           <div className="absolute inset-0 bg-red-500/50 flex items-center justify-center">
                             <span className="text-white text-xs">업로드 실패</span>
                           </div>
                         )}
 
-                        {/* 삭제 버튼 */}
                         <button
                           onClick={() => removeMedia(media.id)}
                           className="absolute top-1 right-1 w-6 h-6 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors"

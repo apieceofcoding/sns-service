@@ -28,7 +28,6 @@ public class RecommendActionRepository {
             }
             return;
         }
-        // A repeated impression keeps the first row. Anything else means the post is gone.
         Integer seen = jdbc.queryForObject("""
                 SELECT count(*) FROM post_actions WHERE user_id = ? AND post_id = ? AND action = ?
                 """, Integer.class, userId, postId, action);

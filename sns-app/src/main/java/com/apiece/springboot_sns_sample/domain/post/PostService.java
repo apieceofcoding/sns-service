@@ -123,7 +123,6 @@ public class PostService {
 
         List<Long> postIds = posts.stream().map(Post::getId).toList();
 
-        // 관련 게시물 일괄 조회
         Set<Long> relatedPostIds = posts.stream()
                 .flatMap(p -> java.util.stream.Stream.of(p.getRepostId(), p.getQuoteId(), p.getParentId()))
                 .filter(Objects::nonNull)
@@ -134,7 +133,6 @@ public class PostService {
                 : postRepository.findAllByIdInAndDeletedAtIsNull(new ArrayList<>(relatedPostIds)).stream()
                         .collect(Collectors.toMap(Post::getId, p -> p));
 
-        // 사용자의 좋아요/재게시 정보 일괄 조회
         Map<Long, Like> likesMap = likeRepository.findByUserIdAndPostIdInAndDeletedAtIsNull(user.getId(), postIds).stream()
                 .collect(Collectors.toMap(l -> l.getPost().getId(), l -> l));
 

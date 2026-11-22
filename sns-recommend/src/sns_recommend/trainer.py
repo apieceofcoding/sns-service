@@ -1,5 +1,3 @@
-"""Continuous training: retrain on new data, check the result, and promote only if it is better."""
-
 from __future__ import annotations
 
 import argparse
@@ -64,7 +62,6 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
 
 
 def monitor(hours: float = 1) -> dict:
-    """Score the serving model on the latest visits. A drop means tastes have moved."""
     serving = active()
     if serving is None:
         raise LookupError("no active model")

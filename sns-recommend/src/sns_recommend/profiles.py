@@ -9,7 +9,6 @@ from .embeddings import embedding_model, normalize
 
 
 def build_user_vector(user_id: int, before: datetime | None = None) -> list[float] | None:
-    """Average of up to 5 post vectors the user reacted to before `before`. Memory only."""
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     reference = before or datetime.now(UTC)

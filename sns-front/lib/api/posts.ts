@@ -26,7 +26,6 @@ export const postsApi = {
     return apiClient.post<void>(`/api/v1/posts/${id}/view`)
   },
 
-  // 추천에 쓰는 행동 기록. 실패해도 화면 동작을 막지 않습니다.
   recordAction: (action: "impression" | "click", postId: number) => {
     return apiClient
       .post<void>("/api/v1/recommend/actions", { eventId: crypto.randomUUID(), action, postId })
