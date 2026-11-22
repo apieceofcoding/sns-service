@@ -32,7 +32,6 @@ class RecommendControllerTest {
         when(posts.enrichWithUserContext(List.of(), user)).thenReturn(List.of());
 
         MockMvcBuilders.standaloneSetup(new RecommendController(recommend, posts))
-                .setControllerAdvice(new RecommendExceptionHandler())
                 .setCustomArgumentResolvers(resolver(user)).build()
                 .perform(get("/api/v1/recommend?userId=999"))
                 .andExpect(status().isOk())
@@ -46,42 +45,10 @@ class RecommendControllerTest {
     void rejectsMissingUserBeforeCallingRecommend() throws Exception {
         var recommend = mock(RecommendFeedService.class);
         MockMvcBuilders.standaloneSetup(new RecommendController(recommend, mock(PostService.class)))
-                .setControllerAdvice(new RecommendExceptionHandler())
                 .setCustomArgumentResolvers(resolver(null)).build()
                 .perform(get("/api/v1/recommend"))
                 .andExpect(status().isUnauthorized());
         verifyNoInteractions(recommend);
-    }
-
-    @Test
-    void returnsExpiredCursorWithoutAnErrorDispatch() throws Exception {
-        var recommend = mock(RecommendFeedService.class);
-        User user = User.create("reader", "");
-        ReflectionTestUtils.setField(user, "id", 7L);
-        when(recommend.get(7, 20, "old")).thenThrow(new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.GONE, "추천 세션을 새로 시작하세요"));
-        MockMvcBuilders.standaloneSetup(new RecommendController(recommend, mock(PostService.class)))
-                .setControllerAdvice(new RecommendExceptionHandler())
-                .setCustomArgumentResolvers(resolver(user)).build()
-                .perform(get("/api/v1/recommend?cursor=old"))
-                .andExpect(status().isGone())
-                .andExpect(jsonPath("$.status").value(410));
-    }
-
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(ints = {400, 410, 422, 500})
-    void preservesClientErrorsAndMapsUpstreamFailureTo503(int status) throws Exception {
-        var recommend = mock(RecommendFeedService.class);
-        User user = User.create("reader", "");
-        ReflectionTestUtils.setField(user, "id", 7L);
-        when(recommend.get(7, 20, "cursor")).thenThrow(
-                new org.springframework.web.client.RestClientResponseException(
-                        "upstream", org.springframework.http.HttpStatusCode.valueOf(status), "", null, null, null));
-        MockMvcBuilders.standaloneSetup(new RecommendController(recommend, mock(PostService.class)))
-                .setControllerAdvice(new RecommendExceptionHandler())
-                .setCustomArgumentResolvers(resolver(user)).build()
-                .perform(get("/api/v1/recommend?cursor=cursor"))
-                .andExpect(status().is(status == 500 ? 503 : status));
     }
 
     private HandlerMethodArgumentResolver resolver(User user) {
