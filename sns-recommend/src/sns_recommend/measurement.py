@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import time
+from functools import wraps
+
 from .db import connection
 
 
@@ -21,6 +24,22 @@ def record_generation(event: dict, duration_ms: float, result: dict | None, erro
                 error or None,
             ),
         )
+
+
+def measured(generate):
+    @wraps(generate)
+    def wrapper(event: dict) -> dict:
+        started = time.perf_counter()
+        try:
+            result = generate(event)
+        except Exception as exc:
+            elapsed = (time.perf_counter() - started) * 1000
+            record_generation(event, elapsed, None, type(exc).__name__)
+            raise
+        record_generation(event, (time.perf_counter() - started) * 1000, result)
+        return result
+
+    return wrapper
 
 
 def record_served(user_id: int, feed: dict) -> None:
