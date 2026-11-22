@@ -1,5 +1,3 @@
-"""A small transformer that reads recent reactions and predicts reactions to each candidate."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +7,6 @@ from torch import nn
 
 from .dataset import ACTIONS, CANDIDATES, HISTORY, LABELS
 
-# Final score is a weighted sum of predicted reactions, as in large feed rankers.
 WEIGHTS = {"click": 1.0, "like": 1.0}
 
 
@@ -17,19 +14,17 @@ class Ranker(nn.Module):
     def __init__(self, dims: int = 768, width: int = 64, layers: int = 2, heads: int = 4):
         super().__init__()
         self.config = {"dims": dims, "width": width, "layers": layers, "heads": heads}
-        self.post = nn.Linear(dims, width)  # post vector from the embedding model
-        self.action = nn.Embedding(len(ACTIONS) + 1, width)  # click, like, reply, repost
-        self.age = nn.Linear(1, width)  # hours since the reaction or since posting
-        self.position = nn.Embedding(HISTORY, width)  # attention alone ignores order
-        self.role = nn.Embedding(2, width)  # 0: history, 1: candidate
-        self.user = nn.Parameter(torch.zeros(1, 1, width))  # always present, never padded
+        self.post = nn.Linear(dims, width)
+        self.action = nn.Embedding(len(ACTIONS) + 1, width)
+        self.age = nn.Linear(1, width)
+        self.position = nn.Embedding(HISTORY, width)
+        self.role = nn.Embedding(2, width)
+        self.user = nn.Parameter(torch.zeros(1, 1, width))
         layer = nn.TransformerEncoderLayer(
             width, heads, 4 * width, dropout=0.1, batch_first=True, norm_first=True
         )
         self.encoder = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
         self.head = nn.Linear(width, len(LABELS))
-        # Candidates see the history and themselves, never each other, and the history never
-        # sees candidates. A candidate's score does not depend on the other candidates.
         context = 1 + HISTORY
         size = context + CANDIDATES
         mask = torch.zeros(size, size, dtype=torch.bool)
@@ -38,7 +33,6 @@ class Ranker(nn.Module):
         self.register_buffer("mask", mask, persistent=False)
 
     def forward(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        """Logits with shape [sessions, candidates, reactions]."""
         table = batch["table"]
         history = (
             self.post(table[batch["history"]])

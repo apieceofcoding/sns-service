@@ -32,10 +32,10 @@ def test_visits_are_split_by_gap_and_history_never_includes_the_future():
 
 def test_a_reaction_is_a_label_only_within_the_window_after_the_impression():
     events = [
-        event(2, "click", -1),  # before the post was shown
+        event(2, "click", -1),
         event(2, "impression", 0),
         event(3, "impression", 0),
-        event(3, "like", 9),  # after the window closed
+        event(3, "like", 9),
     ]
     [session] = build_sessions(events)
     assert session["labels"] == [[0.0, 0.0], [0.0, 0.0]]
@@ -52,7 +52,7 @@ def test_encoding_keeps_the_latest_action_last_and_pads_the_rest():
     session = {
         "start": T0 + timedelta(days=2),
         "history": [(1, "like", T0), (2, "click", T0 + timedelta(days=1))],
-        "candidates": [3, 99],  # 99 has no vector and is dropped
+        "candidates": [3, 99],
         "labels": [[1.0, 0.0], [1.0, 1.0]],
     }
     batch = encode([session], features)

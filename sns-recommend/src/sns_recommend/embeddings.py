@@ -2,7 +2,6 @@ import math
 
 from .config import settings
 
-# Fixture mode only: keyword counts stand in for model vectors in tests.
 KEYWORDS = [
     ["python", "fastapi", "postgresql", "백엔드", "데이터베이스"],
     ["서울", "제주", "여행", "사진", "맛집"],
@@ -19,7 +18,6 @@ def normalize(vector):
 
 
 def embedding_model():
-    """Model name and dimensions. Fixture vectors get a prefix so they never mix."""
     cfg = settings()
     name = f"{cfg.embedding_model}:{cfg.dimensions}"
     return "fixture:" + name if cfg.model_mode == "fixture" else name

@@ -8,7 +8,6 @@ BATCH_SIZE = 20
 
 
 def posts_needing_index(rows):
-    """Compare changed posts with stored vectors. Unchanged posts cost no model call."""
     with connection() as conn:
         stored = {
             r["post_id"]: r
@@ -22,19 +21,15 @@ def posts_needing_index(rows):
     for post in rows:
         row = stored.get(post["id"])
         current = bool(row) and (row["content_version"], row["model"]) == (post["version"], model)
-        # A visible post needs a current vector. A hidden post needs its vector removed.
         if (post["visible"] and not current) or (not post["visible"] and row):
             needed.append(post["id"])
     return needed
 
 
 def index_changes():
-    """Index the next changed posts. The cursor moves only after the model call succeeds."""
-    # Another embedding model starts from the beginning, which re-indexes every post.
     name = f"post_index:{embedding_model()}"
     with connection() as conn:
         position = load_position(conn, name)
-    # The saved cursor stays behind the overlap window, but reading must still move through it.
     reading = position
     while True:
         with source_connection() as original:
@@ -66,7 +61,6 @@ def index_posts(post_ids):
     indexed = {r["post_id"]: r["content_version"] for r in rows}
     active = [p for p in posts if p["visible"] and indexed.get(p["id"]) != p["version"]]
     vectors = embed_texts([p["body"] for p in active]) if active else []
-    # A post edited or deleted during the model call keeps no vector. Its own event indexes it.
     with source_connection() as original:
         locked = original.execute(
             "SELECT id,content_version,deleted_at FROM posts WHERE id=ANY(%s) FOR SHARE",

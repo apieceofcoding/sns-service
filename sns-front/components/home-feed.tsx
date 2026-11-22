@@ -97,7 +97,6 @@ export function HomeFeed() {
           <TweetCard key={post.id} post={post} />
         ))}
 
-        {/* Infinite scroll trigger */}
         <div ref={loadMoreRef} className="h-10">
           {isFetchingNextPage && (
             <div className="flex items-center justify-center p-4">

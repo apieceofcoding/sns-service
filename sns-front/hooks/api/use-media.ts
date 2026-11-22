@@ -50,7 +50,6 @@ export function useMediaUpload() {
     const mediaType = getMediaType(file)
     const preview = URL.createObjectURL(file)
 
-    // 임시 ID로 UI에 추가
     const tempId = Date.now()
     setUploadingMedia(prev => [...prev, {
       id: tempId,
@@ -61,7 +60,6 @@ export function useMediaUpload() {
     }])
 
     try {
-      // 1. Init media - presigned URL 받기
       const initResponse = await mediaApi.initUpload({
         mediaType,
         fileSize: file.size
@@ -69,23 +67,19 @@ export function useMediaUpload() {
 
       const mediaId = initResponse.id
 
-      // ID 업데이트
       setUploadingMedia(prev => prev.map(m =>
         m.id === tempId ? { ...m, id: mediaId } : m
       ))
 
-      // 2. S3에 파일 업로드
       let parts: MediaUploadPart[] = []
 
       if (initResponse.presignedUrlParts && initResponse.presignedUrlParts.length > 0) {
-        // Multipart upload
         parts = await uploadMultipart(file, initResponse, (progress) => {
           setUploadingMedia(prev => prev.map(m =>
             m.id === mediaId ? { ...m, progress } : m
           ))
         })
       } else if (initResponse.presignedUrl) {
-        // Single part upload
         await uploadSinglePart(file, initResponse.presignedUrl, (progress) => {
           setUploadingMedia(prev => prev.map(m =>
             m.id === mediaId ? { ...m, progress } : m
@@ -93,13 +87,11 @@ export function useMediaUpload() {
         })
       }
 
-      // 3. 업로드 완료 알림
       await mediaApi.uploadComplete({
         mediaId,
         parts: parts.length > 0 ? parts : undefined
       })
 
-      // 성공 상태로 업데이트
       setUploadingMedia(prev => prev.map(m =>
         m.id === mediaId ? { ...m, progress: 100, status: 'completed' } : m
       ))
@@ -109,7 +101,6 @@ export function useMediaUpload() {
     } catch (error) {
       console.error('Media upload failed:', error)
       toast.error('미디어 업로드 실패')
-      // 에러 상태로 업데이트
       setUploadingMedia(prev => prev.map(m =>
         m.id === tempId ? { ...m, status: 'error' } : m
       ))

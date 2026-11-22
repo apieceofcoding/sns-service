@@ -1,5 +1,3 @@
-"""Train the ranker on past sessions and compare it with simple rankings on later sessions."""
-
 from __future__ import annotations
 
 import math
@@ -16,7 +14,6 @@ from .model import Ranker, save, score
 
 
 def split(sessions: list[dict], valid_ratio: float = 0.25) -> tuple[list[dict], list[dict]]:
-    """Split by time: the model is checked on visits that happened after its training data."""
     cut = int(len(sessions) * (1 - valid_ratio))
     return sessions[:cut], sessions[cut:]
 
@@ -43,7 +40,6 @@ def fit(
 
 
 def ndcg(scores: torch.Tensor, batch: dict[str, torch.Tensor], k: int = 10) -> float | None:
-    """Mean NDCG@k over sessions with at least one reaction. A like counts more than a click."""
     relevance = batch["labels"].sum(-1)
     values = []
     for row in range(len(scores)):
@@ -60,7 +56,6 @@ def ndcg(scores: torch.Tensor, batch: dict[str, torch.Tensor], k: int = 10) -> f
 
 
 def embedding_scores(batch: dict[str, torch.Tensor]) -> torch.Tensor:
-    """Similarity to the mean vector of the last 5 reacted posts, as in candidate retrieval."""
     table = batch["table"]
     users = []
     for row in batch["history"]:
@@ -88,7 +83,6 @@ def prepare(until=None) -> tuple[list[dict], dict[int, dict]]:
 
 
 def train(epochs: int = 40, path: Path | None = None) -> dict:
-    """Train on earlier visits, compare on later ones, and save the model file."""
     sessions, features = prepare()
     train_sessions, valid_sessions = split(sessions)
     if len(train_sessions) < 20 or not features:
