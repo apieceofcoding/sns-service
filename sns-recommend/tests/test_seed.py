@@ -15,7 +15,6 @@ def test_every_post_has_its_own_body_and_authors_share_the_work():
     posts = [post_fields(i) for i in range(1, POSTS + 1)]
     assert len({body for _, body in posts}) == POSTS
     assert Counter(author for author, _ in posts) == dict.fromkeys(AUTHORS, POSTS // 24)
-    # Posts after the seed keep the pattern, so the simulator can publish new ones.
     assert post_fields(POSTS + 1)[0] in AUTHORS
 
 

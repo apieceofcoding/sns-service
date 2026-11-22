@@ -21,7 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60 * 1000, // 5분
   })
 
-  // user가 유효한 객체인지 확인 (id와 username이 있어야 함)
   const isValidUser = !!user && typeof user.id === 'number' && typeof user.username === 'string'
 
   const value: AuthContextType = {

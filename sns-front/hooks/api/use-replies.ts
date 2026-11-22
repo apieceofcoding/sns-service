@@ -23,7 +23,6 @@ export function useCreateReply() {
       queryClient.invalidateQueries({ queryKey: ['replies', variables.postId] })
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
-      // 부모 게시물의 replyCount 업데이트
       queryClient.setQueryData(['posts', variables.postId], (old: Post | undefined) => {
         if (old) {
           return { ...old, replyCount: old.replyCount + 1 }
