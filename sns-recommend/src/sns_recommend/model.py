@@ -7,8 +7,6 @@ from torch import nn
 
 from .dataset import ACTIONS, CANDIDATES, HISTORY, LABELS
 
-WEIGHTS = {"click": 1.0, "like": 1.0}
-
 
 class Ranker(nn.Module):
     def __init__(self, dims: int = 768, width: int = 64, layers: int = 2, heads: int = 4):
@@ -56,9 +54,8 @@ class Ranker(nn.Module):
 def score(model: Ranker, batch: dict[str, torch.Tensor]) -> torch.Tensor:
     model.eval()
     with torch.no_grad():
-        probability = torch.sigmoid(model(batch))
-    weights = torch.tensor([WEIGHTS[label] for label in LABELS])
-    return (probability * weights).sum(-1)
+        # Score = click probability + like probability.
+        return torch.sigmoid(model(batch)).sum(-1)
 
 
 def save(model: Ranker, path: Path, info: dict) -> None:
