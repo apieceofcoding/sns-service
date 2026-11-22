@@ -9,7 +9,6 @@ def test_feed_read_only_reads(
     monkeypatch: pytest.MonkeyPatch, ready: bool, stale: bool, cursor: str | None
 ) -> None:
     monkeypatch.setattr(api, "excluded_ids", lambda user: set())
-    monkeypatch.setattr(api.source, "user_exists", lambda user: True)
     monkeypatch.setattr(
         api,
         "read_feed",

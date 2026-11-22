@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     source_database_url: str = "postgresql://snsuser:snspassword@localhost:5432/snsdb"
     database_url: str = "postgresql://recommend:recommend@localhost:55432/recommend"
     redis_url: str = "redis://localhost:56379/0"
-    cursor_secret: str = "course-local-cursor-secret"
     model_mode: Literal["fixture", "live"] = "live"
     model_api_key: SecretStr = SecretStr("ollama")
     model_base_url: str = "http://localhost:11434/v1"

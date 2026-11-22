@@ -6,21 +6,13 @@ from .config import settings
 from .embeddings import embedding_model
 from .model import Ranker, load
 
-_cache: dict = {}
-
 
 def serving_model() -> tuple[Ranker | None, str | None]:
+    """The trained model, or None when there is none or it used another embedding model."""
     path = Path(settings().model_dir) / "latest.pt"
     if not path.is_file():
         return None, None
-    key = path.stat().st_mtime_ns
-    if _cache.get("key") != key:
-        try:
-            model, info = load(path)
-        except (OSError, RuntimeError, KeyError):
-            return None, None
-        usable = info.get("embedding_model") == embedding_model()
-        _cache.update(key=key, model=model if usable else None, version=info["trained_until"])
-    if _cache["model"] is None:
+    model, info = load(path)
+    if info.get("embedding_model") != embedding_model():
         return None, None
-    return _cache["model"], _cache["version"]
+    return model, info["trained_until"]
