@@ -25,7 +25,6 @@ class RecommendActionControllerTest {
         User user = userId == null ? null : User.create("reader", "");
         if (user != null) ReflectionTestUtils.setField(user, "id", userId);
         return MockMvcBuilders.standaloneSetup(new RecommendActionController(actions))
-            .setControllerAdvice(new RecommendExceptionHandler())
             .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                 public boolean supportsParameter(MethodParameter parameter) {
                     return parameter.hasParameterAnnotation(AuthUser.class);
