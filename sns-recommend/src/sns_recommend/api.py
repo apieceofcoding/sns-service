@@ -27,14 +27,12 @@ def measurements(minutes: int = Query(60, ge=1, le=1440)):
 def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None = Query(None, max_length=512)):
     try:
         excluded = excluded_ids(user_id)
-        # Deleted posts are checked in the SNS database for this page.
         result = read_feed(user_id, limit, cursor, excluded, alive=source.alive_ids)
         if not source.user_exists(user_id):
             raise HTTPException(404, "unknown user")
         try:
             record_served(user_id, result)
         except psycopg.Error as exc:
-            # The feed matters more than its record.
             logger.warning("Served posts not recorded: %s", type(exc).__name__)
         return result
     except ValueError as exc:

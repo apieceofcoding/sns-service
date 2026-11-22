@@ -16,9 +16,7 @@ EventRecord = dict[str, Any]
 
 
 def enqueue(user_id: int, throttle: bool = False) -> str | None:
-    """Keep one pending recommendation request per user."""
     with connection() as conn:
-        # Serialize requests for one user, including the minimum refresh interval.
         conn.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
         if throttle:
             recent = conn.execute(
@@ -120,12 +118,10 @@ def retry(event: EventRecord) -> None:
 
 
 def allocate_generation() -> int:
-    # A later run gets a larger number, so Redis can reject results from older runs.
     return time.time_ns() // 1000
 
 
 def schedule_active() -> dict[str, int]:
-    """Request a new list for users who recently saw posts and whose list is missing or old."""
     with connection() as conn:
         users = conn.execute(
             """SELECT DISTINCT user_id FROM user_events WHERE action='impression'

@@ -1,5 +1,3 @@
-"""Training examples from logged impressions. Training and serving share these features."""
-
 from __future__ import annotations
 
 import json
@@ -35,11 +33,6 @@ def load_events(until: datetime | None = None) -> list[dict]:
 
 
 def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict]:
-    """Group a user's impressions into visits.
-
-    A reaction is a label only if it follows the impression within LABEL_WINDOW. Impressions
-    whose window is still open are left out: their labels could still change. A visit is
-    `ranked` when a ranking chose its posts, which biases what the reader could react to."""
     closed = (now or datetime.now(UTC)) - LABEL_WINDOW
     sessions: list[dict] = []
     by_user: dict[int, list[dict]] = {}
@@ -78,7 +71,6 @@ def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict
 
 
 def post_features(post_ids) -> dict[int, dict]:
-    """Current vector and creation time per post. Posts without a current vector are skipped."""
     ids = sorted(set(post_ids))
     with connection() as conn:
         rows = conn.execute(
@@ -95,9 +87,8 @@ def post_features(post_ids) -> dict[int, dict]:
 
 
 def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.Tensor]:
-    """Turn sessions into padded tensors. Ages are in days before the session start."""
     ids = sorted(features)
-    index = {post_id: i + 1 for i, post_id in enumerate(ids)}  # 0 is padding
+    index = {post_id: i + 1 for i, post_id in enumerate(ids)}
     dims = len(features[ids[0]]["vector"]) if ids else 1
     table = torch.zeros(len(ids) + 1, dims)
     for post_id, i in index.items():
@@ -114,7 +105,7 @@ def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.T
     }
     for row, session in enumerate(sessions):
         history = [h for h in session["history"] if h[0] in index][-HISTORY:]
-        offset = HISTORY - len(history)  # most recent action is always last
+        offset = HISTORY - len(history)
         for j, (post_id, action, at) in enumerate(history):
             batch["history"][row, offset + j] = index[post_id]
             batch["actions"][row, offset + j] = ACTIONS[action]
@@ -130,5 +121,4 @@ def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.T
 
 
 def days(delta: timedelta) -> float:
-    """Days, not hours: inputs near the size of the other inputs train far better."""
     return max(0.0, delta.total_seconds() / 86400)

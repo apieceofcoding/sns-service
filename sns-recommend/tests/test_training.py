@@ -9,7 +9,6 @@ T0 = datetime(2026, 11, 8, tzinfo=UTC)
 
 
 def synthetic_sessions(n=400, seed=1):
-    """Readers click the topic they reacted to last, which the mean vector blurs."""
     rnd = random.Random(seed)
     features = {
         p: {

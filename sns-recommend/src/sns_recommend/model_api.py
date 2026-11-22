@@ -1,5 +1,3 @@
-"""OpenAI-compatible embedding API. Ollama is the course default."""
-
 from __future__ import annotations
 
 import math

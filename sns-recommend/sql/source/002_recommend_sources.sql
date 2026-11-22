@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS post_actions (
  user_id bigint NOT NULL CHECK(user_id>0),
  post_id bigint NOT NULL CHECK(post_id>0),
  action text NOT NULL CHECK(action IN ('impression','click')),
- -- created_at: when the user saw or clicked. recorded_at: when the row reached the database.
  created_at timestamptz NOT NULL DEFAULT now(),
  recorded_at timestamptz NOT NULL DEFAULT now()
 );

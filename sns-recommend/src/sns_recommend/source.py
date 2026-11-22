@@ -1,10 +1,7 @@
-"""Reads from the SNS database. Posts and accounts stay there and are never copied."""
-
 from datetime import timedelta
 
 from .db import source_connection
 
-# A feed candidate is an original post: not deleted, not a reply and not a repost.
 VISIBLE = "deleted_at IS NULL AND parent_id IS NULL AND repost_id IS NULL"
 
 
@@ -74,7 +71,6 @@ def authors(post_ids):
 
 
 def created_times(post_ids):
-    """Version and creation time of visible posts, for model features."""
     with source_connection() as conn:
         rows = conn.execute(
             f"""SELECT id,content_version,created_at AT TIME ZONE 'UTC' AS created_at

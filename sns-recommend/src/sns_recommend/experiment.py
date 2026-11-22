@@ -1,9 +1,3 @@
-"""A/B test: readers are split in two, and a new ranking is promoted only if its group does better.
-
-Offline NDCG says which model orders past impressions better. Only readers reacting to the
-feed we actually served can say whether the feed got better.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -20,12 +14,11 @@ from .measurement import record_served
 from .registry import active, newest_candidate, promote, reject, version_row
 
 ARMS = ("control", "treatment")
-NEW_POSTS = 12  # Authors keep posting while readers visit.
-LIKE_TOLERANCE = 0.95  # Guardrail: the like rate may not fall below this share of control's.
+NEW_POSTS = 12
+LIKE_TOLERANCE = 0.95
 
 
 def arm(user_id: int, name: str) -> str:
-    """Stable per experiment: the same reader always lands in the same group."""
     digest = hashlib.sha256(f"{name}:{user_id}".encode()).digest()
     return ARMS[digest[0] % 2]
 
@@ -36,7 +29,6 @@ def running() -> dict | None:
 
 
 def assigned(user_id: int) -> dict | None:
-    """The ranking this reader's group gets, or None when no experiment is running."""
     current = running()
     if current is None:
         return None
@@ -51,11 +43,6 @@ def assigned(user_id: int) -> dict | None:
 
 
 def start(name: str, spread: bool = True, min_impressions: int = 3000) -> dict:
-    """Control serves the active model. Treatment serves the newest candidate, or, with
-    `spread` off, the same model without author spreading.
-
-    `min_impressions` per group is fixed before the first result, so nobody stops on a lucky peek.
-    """
     if running():
         raise ValueError("another experiment is running")
     serving, candidate = active(), newest_candidate()
@@ -72,8 +59,7 @@ def start(name: str, spread: bool = True, min_impressions: int = 3000) -> dict:
 
 
 def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
-    """Each round authors post, then every reader opens the published feed and reacts."""
-    from .generation import generate_for_user  # generation asks this module for the group
+    from .generation import generate_for_user
 
     if running() is None:
         raise LookupError("start an experiment first")
@@ -84,14 +70,14 @@ def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
     moods = {u: max(t, key=t.get) for u, t in tastes.items()}
     for _ in range(rounds):
         simulator.publish_posts(NEW_POSTS)
-        drain()  # New posts get vectors; earlier reactions become history and the seen set.
+        drain()
         posts = {p["id"]: p for p in simulator.visible_posts()}
         rows: tuple[list, list, list] = ([], [], [])
         for user_id in reader_ids:
             try:
                 generate_for_user(user_id)
             except (LookupError, RuntimeError):
-                continue  # Unknown reader, or a running worker already owns the request.
+                continue
             feed = read_feed(
                 user_id, simulator.SHOWN, excluded=excluded_ids(user_id), alive=source.alive_ids
             )
@@ -114,13 +100,6 @@ def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
 
 
 def compare_readers(control: list[tuple[int, int]], treatment: list[tuple[int, int]]) -> dict:
-    """Permutation test with the reader as the unit, because readers were what we split.
-
-    Each item is one reader's (clicks, impressions). Shuffling the group labels between readers
-    shows how often chance alone gives a gap this large. Counting impressions as independent
-    would overstate the evidence: one reader's impressions resemble each other.
-    """
-
     def gap(groups: list[int]) -> float:
         clicks, shown = [0, 0], [0, 0]
         for (c, n), g in zip(readers, groups, strict=True):
@@ -141,13 +120,11 @@ def compare_readers(control: list[tuple[int, int]], treatment: list[tuple[int, i
     base = sum(c for c, _ in control) / shown[0]
     return {
         "lift": round(observed / base, 3) if base else None,
-        # Counting the observed split as one of the shuffles keeps the estimate above zero.
         "p_value": round((extreme + 1) / (trials + 1), 4),
     }
 
 
 def report(name: str | None = None) -> dict:
-    """Per group: reactions to the posts that group was actually served, counted per reader."""
     with connection() as conn:
         exp = conn.execute(
             """SELECT * FROM experiments WHERE %s::text IS NULL OR name=%s
@@ -215,7 +192,6 @@ def verdict(arms: dict, clicks: dict, ready: bool) -> str:
 
 
 def stop() -> dict:
-    """End the experiment and act on the result: a winning candidate model starts serving."""
     current = running()
     if current is None:
         raise LookupError("no running experiment")

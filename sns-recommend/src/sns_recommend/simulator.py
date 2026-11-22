@@ -1,9 +1,3 @@
-"""Synthetic readers for training data. Each reader has a hidden taste that the model must learn.
-
-The simulator writes to the SNS database like the app would: impressions and clicks go to
-post_actions, likes go to likes. The event worker copies them into user_events as usual.
-"""
-
 from __future__ import annotations
 
 import math
@@ -32,10 +26,6 @@ def readers(users: int = 300) -> list[int]:
 
 
 def age_cost(shift: bool = False) -> float:
-    """What an hour of post age costs a reader. After a shift the whole service is in a rush
-    where only fresh posts get attention.
-
-    Stored so every command sees the same readers."""
     with connection() as conn:
         row = conn.execute(
             """INSERT INTO simulation(shifted) VALUES (%s) ON CONFLICT (only_row)
@@ -46,13 +36,11 @@ def age_cost(shift: bool = False) -> float:
 
 
 def taste(user_id: int) -> dict[str, float]:
-    """Hidden preference: a main topic and a second topic."""
     first, second = READERS.get(user_id) or Random(user_id * 7919).sample(TOPICS, 2)
     return {t: 1.0 if t == first else 0.6 if t == second else 0.0 for t in TOPICS}
 
 
 def drift(rnd: Random, weights: dict[str, float], mood: str) -> str:
-    """Short-term interest moves between visits, mostly toward the hidden taste."""
     if rnd.random() < 0.4:
         return rnd.choices(TOPICS, [weights[t] + 0.1 for t in TOPICS])[0]
     return mood
@@ -66,7 +54,6 @@ def react(rnd: Random, weight: float, in_mood: bool, aging: float) -> tuple[bool
 
 
 def visit(rnd, user_id, posts, at, weights, mood, hourly_cost, rows) -> None:
-    """The reader sees `posts` at `at` and reacts. Appends to (impressions, clicks, likes)."""
     impressions, actions, likes = rows
     for post in posts:
         topic = topic_of(post["user_id"])
@@ -89,7 +76,6 @@ def visible_posts() -> list[dict]:
 
 
 def write(impressions: list, actions: list, likes: list) -> None:
-    """Write like the app does: impressions and clicks to post_actions, likes to likes."""
     with source_connection() as conn:
         with conn.cursor().copy(
             "COPY post_actions(event_id,user_id,post_id,action,created_at) FROM STDIN"
@@ -108,7 +94,6 @@ def write(impressions: list, actions: list, likes: list) -> None:
 
 
 def publish_posts(count: int) -> int:
-    """Authors write `count` new posts now, continuing the seed's author and body pattern."""
     now = datetime.now(UTC)
     with source_connection() as conn:
         first = conn.execute("SELECT max(id)+1 AS next FROM posts").fetchone()["next"]
@@ -124,7 +109,6 @@ def publish_posts(count: int) -> int:
 
 
 def simulate(users: int = 300, sessions: int = 15, hours: float = 4, shift: bool = False):
-    """Readers see random recent posts in past time slots. Used to collect training data."""
     now = datetime.now(UTC)
     start = now - timedelta(hours=hours)
     reader_ids = readers(users)

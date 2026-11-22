@@ -9,7 +9,6 @@ from .measurement import metrics
 
 
 def benchmark(user_id: int = 7, requests: int = 100) -> dict:
-    """Redis read path only. Excludes HTTP, Spring and the network between services."""
     latencies, ages = [], []
     for _ in range(requests):
         start = perf_counter()

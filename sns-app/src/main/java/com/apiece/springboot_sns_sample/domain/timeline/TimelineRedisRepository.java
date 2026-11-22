@@ -28,7 +28,6 @@ public class TimelineRedisRepository implements TimelineRepository {
         log.info("ZADD {} {} {}", key, score, postId);
         redisTemplate.opsForZSet().add(key, postId.toString(), score);
 
-        // 타임라인 크기 제한 (오래된 항목 삭제)
         Long size = redisTemplate.opsForZSet().size(key);
         if (size != null && size > MAX_TIMELINE_SIZE) {
             redisTemplate.opsForZSet().removeRange(key, 0, size - MAX_TIMELINE_SIZE - 1);
@@ -75,7 +74,6 @@ public class TimelineRedisRepository implements TimelineRepository {
         log.info("ZADD {} {} {}", key, score, postId);
         redisTemplate.opsForZSet().add(key, postId.toString(), score);
 
-        // celeb posts 크기 제한
         Long size = redisTemplate.opsForZSet().size(key);
         if (size != null && size > MAX_CELEB_POSTS_SIZE) {
             redisTemplate.opsForZSet().removeRange(key, 0, size - MAX_CELEB_POSTS_SIZE - 1);

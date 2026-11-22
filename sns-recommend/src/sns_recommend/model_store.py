@@ -1,5 +1,3 @@
-"""Models the worker serves: the active version, or the version an experiment asks for."""
-
 from __future__ import annotations
 
 import logging
@@ -14,9 +12,7 @@ _cache: dict[int, Ranker] = {}
 
 
 def serving_model(version: int | None = None) -> tuple[Ranker | None, int | None]:
-    """The given version, or the active one. None means: serve the retrieval order instead."""
     row = version_row(version) if version else active()
-    # A model trained on other vectors cannot read today's vectors.
     if row is None or row["embedding_model"] != embedding_model():
         return None, None
     if row["id"] not in _cache:

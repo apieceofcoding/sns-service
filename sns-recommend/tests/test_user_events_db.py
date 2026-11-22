@@ -1,5 +1,3 @@
-"""Runs against disposable databases only: it deletes every row in the tables it uses."""
-
 import os
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
@@ -33,7 +31,7 @@ pytestmark = pytest.mark.skipif(
     not os.environ.get("SNS_TEST_DISPOSABLE_DB"), reason="needs disposable databases"
 )
 READER = 7
-POSTS = 240  # A fifth of the course data keeps these tests quick.
+POSTS = 240
 
 
 def rows(action: str, user_id: int = READER) -> list[dict]:
@@ -165,7 +163,6 @@ def test_post_changes_are_indexed_by_version_and_like_count_is_ignored() -> None
 
 
 def age_source_rows() -> None:
-    """Move every row out of the overlap window, as if it changed long ago."""
     with source_connection() as conn:
         conn.execute("UPDATE posts SET modified_at=modified_at-interval '1 hour'")
         conn.execute("UPDATE likes SET modified_at=modified_at-interval '1 hour'")
@@ -307,7 +304,6 @@ def test_request_queued_long_ago_is_still_published() -> None:
 
 
 def trained(tmp_path, monkeypatch, users: int = 40) -> dict:
-    """Simulated reactions and a first model, with the offline gate opened for tiny data."""
     monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
     monkeypatch.setattr(trainer.settings(), "promote_margin", -1.0)
     monkeypatch.setattr(trainer, "TOLERANCE", 1.0)
@@ -355,7 +351,6 @@ def test_experiment_serves_each_group_its_model_and_promotes_the_winner(
         and row["model_version"] == models[row["arm"]]
         for row in served
     )
-    # Reactions to served posts count as ranked; the random exposure before them does not.
     flags = {e["ranked"] for e in dataset.load_events() if e["action"] == "impression"}
     assert flags == {True, False}
     monkeypatch.setattr(experiment, "verdict", lambda *args: "treatment wins")

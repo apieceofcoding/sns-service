@@ -1,5 +1,3 @@
-"""What the worker did: how long each run took and which ranking it served."""
-
 from __future__ import annotations
 
 from .db import connection
@@ -26,11 +24,6 @@ def record_generation(event: dict, duration_ms: float, result: dict | None, erro
 
 
 def record_served(user_id: int, feed: dict) -> None:
-    """What this page showed: the list, each position, and the ranking that produced it.
-
-    Later reactions are joined to these rows, so a click can be traced to a model version and
-    an experiment group. A post served again before it was seen keeps the latest record.
-    """
     rows = [
         (
             user_id,

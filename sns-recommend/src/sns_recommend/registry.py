@@ -1,5 +1,3 @@
-"""Model versions: every trained model is recorded, and exactly one serves at a time."""
-
 from __future__ import annotations
 
 import json
@@ -22,7 +20,6 @@ def register(path: str, report: dict, status: str = "candidate") -> int:
             ),
         ).fetchone()
         if status == "candidate":
-            # Only the newest candidate waits for an experiment.
             conn.execute(
                 "UPDATE model_versions SET status='rejected' WHERE status='candidate' AND id<>%s",
                 (row["id"],),
@@ -41,7 +38,6 @@ def version_row(version: int) -> dict | None:
 
 
 def newest_candidate() -> dict | None:
-    """The latest version that passed the offline gate and waits for an experiment."""
     with connection() as conn:
         return conn.execute(
             "SELECT * FROM model_versions WHERE status='candidate' ORDER BY id DESC LIMIT 1"
@@ -57,7 +53,6 @@ def reject(version: int) -> None:
 
 
 def promote(version: int) -> dict:
-    """Serve this version. The previous one is retired and stays available for rollback."""
     with connection() as conn:
         conn.execute("LOCK TABLE model_versions IN SHARE ROW EXCLUSIVE MODE")
         row = conn.execute("SELECT status FROM model_versions WHERE id=%s", (version,)).fetchone()
@@ -71,7 +66,6 @@ def promote(version: int) -> dict:
 
 
 def rollback() -> dict:
-    """Go back to the version that served before the current one."""
     with connection() as conn:
         row = conn.execute(
             """SELECT id FROM model_versions WHERE status='retired' AND activated_at IS NOT NULL

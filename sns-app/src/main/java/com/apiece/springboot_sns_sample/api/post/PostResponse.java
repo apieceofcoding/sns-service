@@ -27,7 +27,6 @@ public record PostResponse(
         Long likeIdByMe,
         Boolean isRepostedByMe,
         Long repostIdByMe,
-        // 관련 게시물 정보
         PostResponse repostedPost,
         PostResponse quotedPost,
         PostResponse parentPost,
@@ -96,7 +95,6 @@ public record PostResponse(
     public static PostResponse from(PostWithUserContext ctx) {
         Post post = ctx.post();
 
-        // 재게시인 경우, repostedPost와 repostedBy 설정
         PostResponse repostedPostResponse = null;
         RepostedBy repostedBy = null;
         if (ctx.repostedPost() != null) {
@@ -107,13 +105,11 @@ public record PostResponse(
             );
         }
 
-        // 인용인 경우, quotedPost 설정
         PostResponse quotedPostResponse = null;
         if (ctx.quotedPost() != null) {
             quotedPostResponse = fromSimple(ctx.quotedPost());
         }
 
-        // 답글인 경우, parentPost 설정
         PostResponse parentPostResponse = null;
         if (ctx.parentPost() != null) {
             parentPostResponse = fromSimple(ctx.parentPost());
@@ -146,7 +142,6 @@ public record PostResponse(
         );
     }
 
-    // 중첩 게시물용 간단한 변환 (무한 재귀 방지)
     private static PostResponse fromSimple(Post post) {
         return new PostResponse(
                 post.getId(),

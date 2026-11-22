@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TweetCard } from "./tweet-card"
 import type { Post } from "@/lib/types"
 
-// 원본 게시물
 const originalPost1: Post = {
   id: 1001,
   userId: 101,
@@ -51,7 +50,6 @@ const originalPost2: Post = {
   repostIdByMe: null,
 }
 
-// 재게시글 예시 - "트렌드코리아"가 "테크뉴스"의 글을 재게시
 const repostExample: Post = {
   id: 2001,
   userId: 103,
@@ -72,7 +70,6 @@ const repostExample: Post = {
   likeIdByMe: null,
   isRepostedByMe: false,
   repostIdByMe: null,
-  // 원본 게시물 정보
   repostedPost: originalPost1,
   repostedBy: {
     userId: 103,
@@ -80,7 +77,6 @@ const repostExample: Post = {
   },
 }
 
-// 인용글 예시 - "스타트업맨"이 "개발자김씨"의 글을 인용
 const quoteExample: Post = {
   id: 3001,
   userId: 104,
@@ -101,11 +97,9 @@ const quoteExample: Post = {
   likeIdByMe: null,
   isRepostedByMe: false,
   repostIdByMe: null,
-  // 인용된 게시물 정보
   quotedPost: originalPost2,
 }
 
-// 일반 게시물
 const normalPost: Post = {
   id: 4001,
   userId: 105,
@@ -128,7 +122,6 @@ const normalPost: Post = {
   repostIdByMe: 6001,
 }
 
-// 답글 예시
 const replyExample: Post = {
   id: 5001,
   userId: 106,
@@ -149,11 +142,9 @@ const replyExample: Post = {
   likeIdByMe: null,
   isRepostedByMe: false,
   repostIdByMe: null,
-  // 부모 게시물 정보
   parentPost: originalPost1,
 }
 
-// 트렌딩 피드에 표시할 게시물들
 const trendingPosts: Post[] = [
   repostExample,    // 재게시글
   quoteExample,     // 인용글

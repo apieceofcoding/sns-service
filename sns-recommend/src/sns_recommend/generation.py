@@ -1,5 +1,3 @@
-"""One recommendation run: retrieve, rank, filter and spread, then publish."""
-
 from __future__ import annotations
 
 import random
@@ -48,10 +46,8 @@ def run(event: dict) -> dict:
 
 
 def order(user_id: int, candidates: list[dict]) -> dict:
-    """This feed's order: a shuffled explore feed, the reader's experiment group, or the default."""
     retrieval_order = [c["id"] for c in candidates]
     if random.random() < settings().explore_rate:
-        # Readers react to posts no ranking chose, which keeps evaluation data unbiased.
         return {"ids": random.sample(retrieval_order, len(retrieval_order)), "strategy": "explore"}
     group = assigned(user_id) or {"model": None, "spread": True}
     if "arm" in group and group["model"] is None:
@@ -64,7 +60,6 @@ def order(user_id: int, candidates: list[dict]) -> dict:
 
 
 def publish_if_owner(event, ranked, generation, created_at) -> bool:
-    """Publish only while this worker still owns the request."""
     with connection() as conn:
         row = conn.execute(
             "SELECT claim_id,processed_at,locked_until FROM user_events WHERE id=%s FOR UPDATE",

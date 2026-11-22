@@ -1,5 +1,3 @@
-"""Continuous training: retrain on new data, check it offline, then let an experiment decide."""
-
 from __future__ import annotations
 
 import argparse
@@ -34,7 +32,6 @@ def gate(ndcg: dict) -> tuple[bool, str]:
 
 def retrain(force: bool = False, epochs: int = 40) -> dict:
     if experiment.running():
-        # A new candidate would replace the one being tested.
         return {"trained": False, "reason": "an experiment is running; stop it first"}
     serving = active()
     sessions, features = prepare()
@@ -62,7 +59,6 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
     path = Path(settings().model_dir) / f"ranker-{datetime.now(UTC):%Y%m%d%H%M%S}.pt"
     save(model, path, report)
     version = register(str(path), report, "candidate" if accepted else "rejected")
-    # The first model has no serving model to be tested against. Later ones need an experiment.
     promoted = accepted and serving is None
     if promoted:
         promote(version)
@@ -72,7 +68,6 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
 
 
 def step() -> dict:
-    """One pass of the pipeline: finish a ready experiment, or retrain and test the candidate."""
     current = experiment.running()
     if current:
         ready = experiment.report(current["name"])["ready"]
@@ -86,7 +81,6 @@ def step() -> dict:
 
 
 def monitor(hours: float = 1) -> dict:
-    """Score the serving model on the latest visits. A drop means tastes have moved."""
     serving = active()
     if serving is None:
         raise LookupError("no active model")

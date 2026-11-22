@@ -8,7 +8,6 @@ from redis import Redis
 
 from .config import settings
 
-# Publish only if no newer run has published. A resumed run reuses its snapshot and its TTL.
 PUBLISH = """
 local existing = redis.call('GET', KEYS[1])
 if existing and existing ~= ARGV[1] then return -1 end

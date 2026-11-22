@@ -50,7 +50,6 @@ def candidates_from(monkeypatch):
 
 
 def test_merge_keeps_fresh_and_popular_when_semantic_fills_k(candidates_from):
-    # 1~40 are similar enough to fill k. 101 is the newest, 102 the most liked.
     posts = [post(i, likes=1) for i in range(1, 41)]
     posts += [post(101, age_hours=1), post(102, likes=1000)]
     similarities = {i: 0.9 - i / 100 for i in range(1, 41)} | {101: 0.01, 102: 0.02}

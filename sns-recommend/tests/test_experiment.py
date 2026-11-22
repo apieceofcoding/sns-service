@@ -13,7 +13,6 @@ def test_groups_are_stable_and_roughly_even() -> None:
 
 def test_the_same_gap_convinces_only_when_most_readers_show_it() -> None:
     steady = compare_readers([(2, 10)] * 40, [(3, 10)] * 40)
-    # Same totals, but one heavy clicker carries the treatment group.
     lucky = compare_readers([(2, 10)] * 40, [(2, 10)] * 39 + [(42, 10)])
     assert steady["lift"] == lucky["lift"] == 0.5
     assert steady["p_value"] < 0.05 < lucky["p_value"]
