@@ -50,38 +50,17 @@ def index_changes():
 
 
 def index_posts(post_ids):
-    posts = source.posts_to_index(post_ids)
-    ids = [p["id"] for p in posts]
+    visible = [p for p in source.posts_to_index(post_ids) if p["visible"]]
+    vectors = embed_texts([p["body"] for p in visible]) if visible else []
     with connection() as conn:
-        rows = conn.execute(
-            """SELECT post_id,content_version FROM post_embeddings
-            WHERE model=%s AND post_id=ANY(%s)""",
-            (embedding_model(), ids),
-        ).fetchall()
-    indexed = {r["post_id"]: r["content_version"] for r in rows}
-    active = [p for p in posts if p["visible"] and indexed.get(p["id"]) != p["version"]]
-    vectors = embed_texts([p["body"] for p in active]) if active else []
-    with source_connection() as original:
-        locked = original.execute(
-            "SELECT id,content_version,deleted_at FROM posts WHERE id=ANY(%s) FOR SHARE",
-            (ids,),
-        ).fetchall()
-        current = {r["id"]: r["content_version"] for r in locked if r["deleted_at"] is None}
-        stored = 0
-        with connection() as conn:
-            for post, vector in zip(active, vectors, strict=True):
-                if current.get(post["id"]) != post["version"]:
-                    continue
-                conn.execute(
-                    """INSERT INTO post_embeddings(post_id,content_version,model,embedding)
-                    VALUES (%s,%s,%s,%s::vector) ON CONFLICT(post_id) DO UPDATE SET
-                    content_version=EXCLUDED.content_version,model=EXCLUDED.model,
-                    embedding=EXCLUDED.embedding
-                    WHERE post_embeddings.content_version<=EXCLUDED.content_version""",
-                    (post["id"], post["version"], embedding_model(), vector_sql(vector)),
-                )
-                stored += 1
-            visible = {p["id"] for p in posts if p["visible"]}
-            gone = list(set(post_ids) - visible)
-            conn.execute("DELETE FROM post_embeddings WHERE post_id=ANY(%s)", (gone,))
-    return {"indexed": stored, "mode": settings().model_mode, "model": embedding_model()}
+        for post, vector in zip(visible, vectors, strict=True):
+            conn.execute(
+                """INSERT INTO post_embeddings(post_id,content_version,model,embedding)
+                VALUES (%s,%s,%s,%s::vector) ON CONFLICT(post_id) DO UPDATE SET
+                content_version=EXCLUDED.content_version,model=EXCLUDED.model,
+                embedding=EXCLUDED.embedding""",
+                (post["id"], post["version"], embedding_model(), vector_sql(vector)),
+            )
+        gone = list(set(post_ids) - {p["id"] for p in visible})
+        conn.execute("DELETE FROM post_embeddings WHERE post_id=ANY(%s)", (gone,))
+    return {"indexed": len(visible), "mode": settings().model_mode, "model": embedding_model()}
