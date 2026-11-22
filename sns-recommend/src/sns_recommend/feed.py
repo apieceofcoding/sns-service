@@ -7,7 +7,6 @@ from redis import Redis
 
 from .config import settings
 
-# Save only when no newer generation is current, so a run that finished late cannot go back.
 PUBLISH = """
 local current = redis.call('GET', KEYS[2])
 if current and tonumber(cjson.decode(current).generation) > tonumber(ARGV[3]) then return 0 end

@@ -32,7 +32,6 @@ def load_events() -> list[dict]:
 
 
 def history_before(events: list[dict], at: datetime) -> list[tuple[int, str, datetime]]:
-    """The last HISTORY reactions before `at`, oldest first. Training and serving both use this."""
     return [
         (e["post_id"], e["action"], e["occurred_at"])
         for e in events

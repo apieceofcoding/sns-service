@@ -17,7 +17,6 @@ def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
             ORDER BY occurred_at DESC,post_id DESC LIMIT %s""",
             (user_id, list(POSITIVE), HISTORY),
         ).fetchall()
-    # Same rule as training: the last reactions before now, oldest first.
     return history_before(list(reversed(rows)), datetime.now(UTC))
 
 

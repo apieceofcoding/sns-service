@@ -12,7 +12,6 @@ from .retrieval import retrieve_candidates
 
 
 def generate(user_id: int) -> dict:
-    # A list that started later wins in Redis, so two runs for one user cannot go backwards.
     started = time.time()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
     ranked = order(user_id, candidates)
