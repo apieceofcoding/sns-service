@@ -20,7 +20,7 @@ def test_every_post_has_its_own_body_and_authors_share_the_work():
 
 def test_each_time_group_contains_all_six_topics():
     reference = datetime(2026, 10, 11, tzinfo=UTC)
-    dates = {i: post_created_at(i, reference, group_size=6) for i in range(1, POSTS + 1)}
+    dates = {i: post_created_at(i, reference) for i in range(1, POSTS + 1)}
     recent = [d for d in dates.values() if reference - timedelta(hours=48) <= d <= reference]
     assert len(recent) == POSTS - 12
     for start in (1, 7, 13, 19):
