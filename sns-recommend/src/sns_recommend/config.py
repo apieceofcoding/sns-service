@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     model_dir: str = "models"
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
-    minimum_refresh_seconds: int = 60
-    lease_seconds: int = 120
 
 
 @lru_cache

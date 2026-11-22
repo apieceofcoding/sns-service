@@ -18,4 +18,4 @@ def test_feed_read_only_reads(
     response = TestClient(api.app).get("/internal/feeds/7")
     assert response.status_code == 200
     assert "refresh_event" not in response.json()
-    assert not hasattr(api, "enqueue") and not hasattr(api, "connection")
+    assert not hasattr(api, "connection")

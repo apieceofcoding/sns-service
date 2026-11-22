@@ -71,7 +71,7 @@ def run(args):
 
         return train(args.epochs)
     if args.command == "generate":
-        from .generation import generate_for_user
+        from .generation import generate
 
-        return generate_for_user(args.user)
+        return generate(args.user)
     raise ValueError(args.command)

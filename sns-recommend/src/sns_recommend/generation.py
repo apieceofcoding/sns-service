@@ -1,25 +1,27 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import time
 
-from .db import connection
-from .event_queue import allocate_generation, claim, enqueue, finish, heartbeat
 from .feed import publish
 from .profiles import build_user_vector
 from .ranking import diversify, rank
 from .retrieval import retrieve_candidates
 
 
-def generate(event: dict) -> dict:
-    user_id = event["user_id"]
-    generation = allocate_generation()
-    created_at = datetime.now(UTC).timestamp()
+def generate(user_id: int) -> dict:
+    # A list that started later wins in Redis, so two runs for one user cannot go backwards.
+    started = time.time()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
     ranked = rank(user_id, candidates)
     ranked["ids"] = diversify(candidates, ranked["ids"])
-    published = publish_if_owner(event, ranked, generation, created_at)
-    if not finish(event):
-        raise RuntimeError("event lease lost")
+    published = publish(
+        user_id,
+        ranked["ids"],
+        ranked["strategy"],
+        int(started * 1_000_000),
+        created_at=started,
+        model_version=ranked.get("model_version"),
+    )
     return {
         "user_id": user_id,
         "strategy": ranked["strategy"],
@@ -27,35 +29,3 @@ def generate(event: dict) -> dict:
         "post_ids": ranked["ids"],
         "published": published,
     }
-
-
-def publish_if_owner(event, ranked, generation, created_at) -> bool:
-    with connection() as conn:
-        row = conn.execute(
-            "SELECT claim_id,processed_at,locked_until FROM user_events WHERE id=%s FOR UPDATE",
-            (event["id"],),
-        ).fetchone()
-        if (
-            row is None
-            or row["claim_id"] != event["claim_id"]
-            or row["processed_at"] is not None
-            or row["locked_until"] <= datetime.now(UTC)
-        ):
-            return False
-        return publish(
-            event["user_id"],
-            ranked["ids"],
-            ranked["strategy"],
-            generation,
-            str(event["id"]),
-            created_at,
-            ranked.get("model_version"),
-        )
-
-
-def generate_for_user(user_id: int) -> dict:
-    event = claim(event_id=enqueue(user_id))
-    if event is None:
-        raise RuntimeError("request already owned by a worker")
-    with heartbeat(event):
-        return generate(event)
