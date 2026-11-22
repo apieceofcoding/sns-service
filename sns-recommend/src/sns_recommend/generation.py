@@ -16,20 +16,20 @@ def generate(event: dict) -> dict:
     created_at = datetime.now(UTC).timestamp()
     candidates = retrieve_candidates(user_id, user_vector=build_user_vector(user_id))
     ranked = rank(user_id, candidates)
-    ids = diversify(candidates, ranked["ids"])
-    published = publish_if_owner(event, ids, ranked, generation, created_at)
+    ranked["ids"] = diversify(candidates, ranked["ids"])
+    published = publish_if_owner(event, ranked, generation, created_at)
     if not finish(event):
         raise RuntimeError("event lease lost")
     return {
         "user_id": user_id,
         "strategy": ranked["strategy"],
         "model_version": ranked.get("model_version"),
-        "post_ids": ids,
+        "post_ids": ranked["ids"],
         "published": published,
     }
 
 
-def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
+def publish_if_owner(event, ranked, generation, created_at) -> bool:
     with connection() as conn:
         row = conn.execute(
             "SELECT claim_id,processed_at,locked_until FROM user_events WHERE id=%s FOR UPDATE",
@@ -44,7 +44,7 @@ def publish_if_owner(event, ids, ranked, generation, created_at) -> bool:
             return False
         return publish(
             event["user_id"],
-            ids,
+            ranked["ids"],
             ranked["strategy"],
             generation,
             str(event["id"]),

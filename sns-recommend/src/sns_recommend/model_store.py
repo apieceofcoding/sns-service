@@ -9,7 +9,7 @@ from .model import Ranker, load
 _cache: dict = {}
 
 
-def active_model() -> tuple[Ranker | None, str | None]:
+def serving_model() -> tuple[Ranker | None, str | None]:
     path = Path(settings().model_dir) / "latest.pt"
     if not path.is_file():
         return None, None
