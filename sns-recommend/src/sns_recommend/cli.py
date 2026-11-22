@@ -16,9 +16,6 @@ def main():
     simulate.add_argument(
         "--shift", action="store_true", help="from now on readers favor fresh posts far more"
     )
-    post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
-    post.add_argument("--post", type=int, default=1001)
-    post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     commands.add_parser("recall").add_argument("--hours", type=float, default=1)
@@ -46,10 +43,6 @@ def run(args):
         from .simulator import simulate
 
         return simulate(args.users, args.sessions, args.hours, args.shift)
-    if args.command == "source-post":
-        from .source_demo import change_post
-
-        return change_post(args.post, args.body)
     if args.command == "profile":
         from .profiles import build_user_vector
 
