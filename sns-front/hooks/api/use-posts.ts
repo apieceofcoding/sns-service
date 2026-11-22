@@ -26,7 +26,6 @@ export function useCreatePost() {
   return useMutation({
     mutationFn: (data: PostCreateRequest) => postsApi.create(data),
     onSuccess: () => {
-      // 캐시 무효화로 자동 리페칭
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
       queryClient.invalidateQueries({ queryKey: ['profile', 'posts'] })
@@ -46,7 +45,6 @@ export function useUpdatePost() {
     mutationFn: ({ id, data }: { id: number; data: PostUpdateRequest }) =>
       postsApi.update(id, data),
     onSuccess: (updatedPost) => {
-      // 특정 게시물 캐시 업데이트
       queryClient.setQueryData(['posts', updatedPost.id], updatedPost)
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
@@ -59,13 +57,11 @@ export function useUpdatePost() {
   })
 }
 
-// 세션 내 조회된 게시글 ID 추적 (중복 조회 방지)
 const viewedPostIds = new Set<number>()
 
 export function useIncrementView() {
   return useMutation({
     mutationFn: (id: number) => {
-      // 이미 조회한 게시글은 다시 호출하지 않음
       if (viewedPostIds.has(id)) {
         return Promise.resolve()
       }
@@ -80,17 +76,13 @@ export function useDeletePost() {
 
   return useMutation({
     mutationFn: (id: number) => postsApi.delete(id),
-    // Optimistic update
     onMutate: async (id) => {
-      // 진행 중인 리페치 취소
       await queryClient.cancelQueries({ queryKey: ['posts'] })
       await queryClient.cancelQueries({ queryKey: ['timeline'] })
 
-      // 이전 데이터 백업
       const previousPosts = queryClient.getQueryData(['posts'])
       const previousTimeline = queryClient.getQueryData(['timeline'])
 
-      // 즉시 UI에서 제거
       queryClient.setQueryData(['posts'], (old: Post[] | undefined) =>
         old?.filter((p) => p.id !== id)
       )
@@ -101,7 +93,6 @@ export function useDeletePost() {
       return { previousPosts, previousTimeline }
     },
     onError: (error, id, context) => {
-      // 에러 시 롤백
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -115,7 +106,6 @@ export function useDeletePost() {
       toast.success('게시물이 삭제되었습니다!')
     },
     onSettled: () => {
-      // 최종적으로 서버 데이터로 갱신
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
       queryClient.invalidateQueries({ queryKey: ['profile', 'posts'] })

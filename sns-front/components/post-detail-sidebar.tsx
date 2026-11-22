@@ -18,13 +18,11 @@ const happeningNow = [
 export function PostDetailSidebar() {
   return (
     <div className="p-4 space-y-4">
-      {/* 검색 */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input placeholder="검색" className="pl-12 bg-muted border-none rounded-full" />
       </div>
 
-      {/* 연관된 사람 */}
       <Card className="overflow-hidden">
         <div className="p-4">
           <h2 className="text-xl font-bold">연관된 사람</h2>
@@ -54,7 +52,6 @@ export function PostDetailSidebar() {
         </div>
       </Card>
 
-      {/* 무슨 일이 일어나고 있나요? */}
       <Card className="overflow-hidden">
         <div className="p-4">
           <h2 className="text-xl font-bold">무슨 일이 일어나고 있나요?</h2>

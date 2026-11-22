@@ -18,7 +18,6 @@ export function useAuth() {
       authApi.login(username, password),
     onSuccess: () => {
       toast.success('로그인 성공!')
-      // 전체 페이지 리로드로 모든 상태 초기화
       window.location.href = '/'
     },
     onError: (error) => {
@@ -36,7 +35,6 @@ export function useAuth() {
       console.error('Logout error:', error)
     },
     onSettled: () => {
-      // 전체 페이지 리로드로 모든 상태 초기화
       window.location.href = '/login'
     },
   })

@@ -36,14 +36,12 @@ public class TimelineService {
             return;
         }
 
-        // Fanout on Write (for non-celeb users)
         List<Follow> follows = followRepository.findByFolloweeIdAndDeletedAtIsNull(author.getId());
         follows.parallelStream()
                 .forEach(follow -> timelineRepository.addPostToTimeline(follow.getFollowerId(), postId));
     }
 
     public TimelinePage getTimeline(User user, Double cursor, int limit) {
-        // Fanout on Read (for following celebs)
         List<Follow> follows = followRepository.findByFollowerIdAndDeletedAtIsNull(user.getId());
         follows.parallelStream()
                 .map(Follow::getFolloweeId)

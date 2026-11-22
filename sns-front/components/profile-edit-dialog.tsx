@@ -77,7 +77,6 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* 프로필 이미지 */}
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-muted border-4 border-background">
@@ -94,7 +93,6 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
                 )}
               </div>
 
-              {/* 카메라 오버레이 */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
@@ -103,7 +101,6 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
                 <Camera className="w-8 h-8 text-white" />
               </button>
 
-              {/* 미리보기 삭제 버튼 */}
               {previewUrl && (
                 <button
                   onClick={handleRemovePreview}
@@ -133,13 +130,11 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
             </Button>
           </div>
 
-          {/* 사용자 정보 */}
           <div className="space-y-2">
             <div className="text-sm font-medium text-muted-foreground">사용자명</div>
             <div className="text-lg font-semibold">{user?.username}</div>
           </div>
 
-          {/* 업로드 진행률 */}
           {isUploading && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -151,7 +146,6 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
           )}
         </div>
 
-        {/* 하단 버튼 */}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={handleClose} disabled={isUploading}>
             취소

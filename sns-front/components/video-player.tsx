@@ -52,7 +52,6 @@ export function VideoPlayer({
   const [isEnded, setIsEnded] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
 
-  // 컨트롤 숨기기 타이머
   const resetHideControlsTimer = useCallback(() => {
     if (hideControlsTimeoutRef.current) {
       clearTimeout(hideControlsTimeoutRef.current)
@@ -74,7 +73,6 @@ export function VideoPlayer({
     }
   }, [isPlaying, resetHideControlsTimer])
 
-  // 비디오 이벤트 핸들러
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
@@ -127,7 +125,6 @@ export function VideoPlayer({
     }
   }, [])
 
-  // 전체화면 변경 감지
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement)
@@ -139,7 +136,6 @@ export function VideoPlayer({
     }
   }, [])
 
-  // 뷰포트 진입 시 자동재생
   useEffect(() => {
     if (!autoPlayOnView) return
 
@@ -151,12 +147,9 @@ export function VideoPlayer({
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            // 뷰포트에 50% 이상 보이면 재생
             video.play().catch(() => {
-              // 자동재생 실패 시 무시 (브라우저 정책)
             })
           } else {
-            // 뷰포트를 벗어나면 일시정지
             video.pause()
           }
         })
@@ -195,14 +188,12 @@ export function VideoPlayer({
     if (!video) return
 
     if (isMuted || volume === 0) {
-      // 음소거 해제
       const newVolume = previousVolume > 0 ? previousVolume : 1
       video.volume = newVolume
       video.muted = false
       setVolume(newVolume)
       setIsMuted(false)
     } else {
-      // 음소거
       setPreviousVolume(volume)
       video.muted = true
       setIsMuted(true)
@@ -351,7 +342,6 @@ export function VideoPlayer({
         preload="metadata"
       />
 
-      {/* 중앙 재생/일시정지 버튼 */}
       <div
         className={cn(
           "absolute inset-0 flex items-center justify-center transition-opacity duration-200",
@@ -372,38 +362,31 @@ export function VideoPlayer({
         )}
       </div>
 
-      {/* 하단 컨트롤 바 */}
       <div
         className={cn(
           "absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-200 pt-8 pb-2 px-3",
           showControls ? "opacity-100" : "opacity-0"
         )}
       >
-        {/* 프로그레스 바 */}
         <div
           ref={progressRef}
           className="h-1 bg-white/30 rounded-full cursor-pointer mb-2 group/progress"
           onClick={handleProgressClick}
         >
-          {/* 버퍼 프로그레스 */}
           <div
             className="absolute h-1 bg-white/50 rounded-full pointer-events-none"
             style={{ width: `${buffered}%` }}
           />
-          {/* 재생 프로그레스 */}
           <div
             className="h-1 bg-primary rounded-full relative"
             style={{ width: `${progress}%` }}
           >
-            {/* 드래그 핸들 */}
             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity" />
           </div>
         </div>
 
-        {/* 컨트롤 버튼들 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* 재생/일시정지 */}
             <button
               onClick={togglePlay}
               className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
@@ -415,20 +398,17 @@ export function VideoPlayer({
               )}
             </button>
 
-            {/* 시간 표시 */}
             <span className="text-white text-xs font-medium tabular-nums">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
           </div>
 
           <div className="flex items-center gap-1">
-            {/* 볼륨 컨트롤 */}
             <div
               className="relative"
               onMouseEnter={() => setShowVolumeSlider(true)}
               onMouseLeave={() => setShowVolumeSlider(false)}
             >
-              {/* 볼륨 슬라이더 (호버 시 표시) */}
               <div
                 className={cn(
                   "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-3 bg-black/90 rounded-lg transition-all duration-200",
@@ -442,12 +422,10 @@ export function VideoPlayer({
                   onClick={handleVolumeChange}
                   onMouseDown={handleVolumeDrag}
                 >
-                  {/* 볼륨 레벨 */}
                   <div
                     className="absolute bottom-0 left-0 right-0 bg-primary rounded-full"
                     style={{ height: `${(isMuted ? 0 : volume) * 100}%` }}
                   />
-                  {/* 드래그 핸들 */}
                   <div
                     className="absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow-md"
                     style={{ bottom: `calc(${(isMuted ? 0 : volume) * 100}% - 6px)` }}
@@ -455,7 +433,6 @@ export function VideoPlayer({
                 </div>
               </div>
 
-              {/* 음소거/볼륨 버튼 */}
               <button
                 onClick={toggleMute}
                 className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
@@ -464,7 +441,6 @@ export function VideoPlayer({
               </button>
             </div>
 
-            {/* 전체화면 토글 */}
             <button
               onClick={toggleFullscreen}
               className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
@@ -479,7 +455,6 @@ export function VideoPlayer({
         </div>
       </div>
 
-      {/* 음소거 표시 (우상단) */}
       {isMuted && !showControls && (
         <div className="absolute top-3 right-3">
           <button
@@ -491,7 +466,6 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* GIF 표시 (GIF 타입인 경우에만) */}
       {isGif && (
         <div className="absolute bottom-3 left-3 px-1.5 py-0.5 bg-black/60 rounded text-xs font-bold text-white">
           GIF

@@ -38,7 +38,6 @@ export function TweetComposer() {
       }
     }
 
-    // input 초기화
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -57,11 +56,9 @@ export function TweetComposer() {
         content: content.trim(),
         mediaIds: completedMediaIds,
       })
-      // 성공 시 입력 필드 초기화
       setContent("")
       clearAll()
     } catch (error) {
-      // 에러는 hook에서 처리
       console.error('Failed to create post:', error)
     }
   }
@@ -92,7 +89,6 @@ export function TweetComposer() {
             onChange={(e) => setContent(e.target.value)}
           />
 
-          {/* 미디어 프리뷰 */}
           {uploadingMedia.length > 0 && (
             <div className={`grid gap-2 mt-3 ${
               uploadingMedia.length === 1 ? 'grid-cols-1' :
@@ -126,7 +122,6 @@ export function TweetComposer() {
                       />
                     )}
 
-                    {/* 업로드 진행 상태 오버레이 */}
                     {media.status === 'uploading' && (
                       <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
                         <Loader2 className="w-8 h-8 text-white animate-spin mb-2" />
@@ -135,14 +130,12 @@ export function TweetComposer() {
                       </div>
                     )}
 
-                    {/* 에러 상태 오버레이 */}
                     {media.status === 'error' && (
                       <div className="absolute inset-0 bg-red-500/50 flex items-center justify-center">
                         <span className="text-white text-sm">업로드 실패</span>
                       </div>
                     )}
 
-                    {/* 삭제 버튼 */}
                     <button
                       onClick={() => removeMedia(media.id)}
                       className="absolute top-2 right-2 w-8 h-8 bg-black/70 hover:bg-black/90 rounded-full flex items-center justify-center transition-colors"
