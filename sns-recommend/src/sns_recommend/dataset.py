@@ -32,6 +32,15 @@ def load_events(until: datetime | None = None) -> list[dict]:
         ).fetchall()
 
 
+def history_before(events: list[dict], at: datetime) -> list[tuple[int, str, datetime]]:
+    """The last HISTORY reactions before `at`, oldest first. Training and serving both use this."""
+    return [
+        (e["post_id"], e["action"], e["occurred_at"])
+        for e in events
+        if e["action"] in POSITIVE and e["occurred_at"] < at
+    ][-HISTORY:]
+
+
 def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict]:
     closed = (now or datetime.now(UTC)) - LABEL_WINDOW
     sessions: list[dict] = []
@@ -48,11 +57,7 @@ def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict
             if row["action"] != "impression" or row["occurred_at"] > closed:
                 continue
             if current is None or row["occurred_at"] - current["last"] > SESSION_GAP:
-                history = [
-                    (r["post_id"], r["action"], r["occurred_at"])
-                    for r in rows
-                    if r["action"] in POSITIVE and r["occurred_at"] < row["occurred_at"]
-                ][-HISTORY:]
+                history = history_before(rows, row["occurred_at"])
                 current = {"user_id": user_id, "start": row["occurred_at"], "history": history}
                 current["candidates"], current["labels"], current["ranked"] = [], [], False
                 sessions.append(current)

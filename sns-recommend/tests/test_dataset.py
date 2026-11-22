@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from sns_recommend.dataset import HISTORY, build_sessions, encode
+from sns_recommend.dataset import HISTORY, build_sessions, encode, history_before
 
 T0 = datetime(2026, 11, 8, 12, tzinfo=UTC)
 
@@ -67,3 +67,18 @@ def test_encoding_keeps_the_latest_action_last_and_pads_the_rest():
     assert batch["history_age"][0, -1].item() == 1.0
     assert (batch["candidates"][0] > 0).sum() == 1
     assert batch["candidate_age"][0, 0].item() == 2.0
+
+
+def test_history_keeps_the_last_reactions_before_the_given_time():
+    events = [
+        {
+            "post_id": i,
+            "action": "impression" if i % 3 == 0 else "like",
+            "occurred_at": T0 + timedelta(minutes=i),
+        }
+        for i in range(1, 40)
+    ]
+    history = history_before(events, T0 + timedelta(minutes=35))
+    assert len(history) == HISTORY
+    assert history[-1][0] == 34
+    assert all(action == "like" for _, action, _ in history)
