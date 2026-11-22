@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from collections import Counter
 from datetime import UTC, datetime
 from random import Random
 
@@ -33,28 +32,20 @@ def assigned(user_id: int) -> dict | None:
     if current is None:
         return None
     group = arm(user_id, current["name"])
-    treated = group == "treatment"
-    return {
-        "experiment": current["name"],
-        "arm": group,
-        "model": current["treatment_model" if treated else "control_model"],
-        "spread": current["treatment_spread"] if treated else True,
-    }
+    return {"experiment": current["name"], "arm": group, "model": current[f"{group}_model"]}
 
 
-def start(name: str, spread: bool = True, min_impressions: int = 3000) -> dict:
+def start(name: str, min_impressions: int = 3000) -> dict:
     if running():
         raise ValueError("another experiment is running")
     serving, candidate = active(), newest_candidate()
-    control = serving["id"] if serving else None
-    treatment = candidate["id"] if candidate and spread else control
-    if treatment == control and spread:
+    if candidate is None:
         raise ValueError("nothing to compare: train a candidate first")
     with connection() as conn:
         return conn.execute(
-            """INSERT INTO experiments(name,control_model,treatment_model,treatment_spread,
-            min_impressions) VALUES (%s,%s,%s,%s,%s) RETURNING *""",
-            (name, control, treatment, spread, min_impressions),
+            """INSERT INTO experiments(name,control_model,treatment_model,min_impressions)
+            VALUES (%s,%s,%s,%s) RETURNING *""",
+            (name, serving["id"] if serving else None, candidate["id"], min_impressions),
         ).fetchone()
 
 
@@ -142,22 +133,11 @@ def report(name: str | None = None) -> dict:
             WHERE s.experiment=%s GROUP BY s.arm,s.user_id""",
             (exp["name"],),
         ).fetchall()
-        served = conn.execute(
-            """SELECT arm,snapshot_id,array_agg(post_id) AS posts FROM served_posts
-            WHERE experiment=%s GROUP BY arm,snapshot_id""",
-            (exp["name"],),
-        ).fetchall()
-    authors = source.authors({post for row in served for post in row["posts"]})
     arms = {}
     readers = {}
     for group in ARMS:
         mine = [r for r in rows if r["arm"] == group and r["shown"]]
         shown = sum(r["shown"] for r in mine)
-        shares = [
-            Counter(authors.get(p) for p in row["posts"]).most_common(1)[0][1] / len(row["posts"])
-            for row in served
-            if row["arm"] == group
-        ]
         readers[group] = [(r["clicks"], r["shown"]) for r in mine]
         arms[group] = {
             "model": exp[f"{group}_model"],
@@ -165,13 +145,11 @@ def report(name: str | None = None) -> dict:
             "impressions": shown,
             "click_rate": round(sum(r["clicks"] for r in mine) / shown, 4) if shown else None,
             "like_rate": round(sum(r["likes"] for r in mine) / shown, 4) if shown else None,
-            "one_author_share": round(sum(shares) / len(shares), 3) if shares else None,
         }
     clicks = compare_readers(readers["control"], readers["treatment"])
     ready = all(a["impressions"] >= exp["min_impressions"] for a in arms.values())
     return {
         "experiment": exp["name"],
-        "treatment_spread": exp["treatment_spread"],
         "arms": arms,
         "click_rate": clicks,
         "ready": ready,

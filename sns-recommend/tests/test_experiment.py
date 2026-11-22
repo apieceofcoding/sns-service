@@ -45,21 +45,21 @@ def patch(monkeypatch: pytest.MonkeyPatch, explore_rate: float, group: dict | No
 
 
 def test_explore_feed_is_shuffled_and_belongs_to_no_group(monkeypatch) -> None:
-    patch(monkeypatch, 1.0, {"experiment": "x", "arm": "control", "model": 1, "spread": True})
+    patch(monkeypatch, 1.0, {"experiment": "x", "arm": "control", "model": 1})
     result = generation.order(7, candidates())
     assert result["strategy"] == "explore" and sorted(result["ids"]) == [1, 2, 3]
     assert "arm" not in result
 
 
-def test_each_group_gets_its_model_and_its_spreading(monkeypatch) -> None:
-    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "treatment", "model": 2, "spread": False})
+def test_each_group_gets_its_model(monkeypatch) -> None:
+    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "treatment", "model": 2})
     assert generation.order(7, candidates()) == {
-        "ids": [3, 2, 1],
+        "ids": ["spread", 3, 2, 1],
         "strategy": "model",
         "experiment": "x",
         "arm": "treatment",
     }
-    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "control", "model": None, "spread": True})
+    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "control", "model": None})
     result = generation.order(7, candidates())
     assert (result["ids"], result["strategy"]) == (["spread", 1, 2, 3], "embedding")
     patch(monkeypatch, 0.0, None)

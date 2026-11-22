@@ -1,42 +1,6 @@
 from __future__ import annotations
 
-import time
-from functools import wraps
-
 from .db import connection
-
-
-def record_generation(user_id: int, duration_ms: float, result: dict | None, error: str = ""):
-    result = result or {}
-    with connection() as conn:
-        conn.execute(
-            """INSERT INTO generation_runs(user_id,strategy,model_version,duration_ms,
-            published,error) VALUES (%s,%s,%s,%s,%s,%s)""",
-            (
-                user_id,
-                result.get("strategy"),
-                result.get("model_version"),
-                duration_ms,
-                result.get("published"),
-                error or None,
-            ),
-        )
-
-
-def measured(generate):
-    @wraps(generate)
-    def wrapper(user_id: int) -> dict:
-        started = time.perf_counter()
-        try:
-            result = generate(user_id)
-        except Exception as exc:
-            elapsed = (time.perf_counter() - started) * 1000
-            record_generation(user_id, elapsed, None, type(exc).__name__)
-            raise
-        record_generation(user_id, (time.perf_counter() - started) * 1000, result)
-        return result
-
-    return wrapper
 
 
 def record_served(user_id: int, feed: dict) -> None:
@@ -65,18 +29,8 @@ def record_served(user_id: int, feed: dict) -> None:
         )
 
 
-def metrics(minutes: int = 60) -> dict:
+def metrics() -> dict:
     with connection() as conn:
-        runs = conn.execute(
-            """SELECT count(*) AS runs,
-            percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
-            count(*) FILTER (WHERE strategy='model') AS model,
-            count(*) FILTER (WHERE strategy='explore') AS explore,
-            count(*) FILTER (WHERE strategy LIKE 'embedding%%') AS fallback,
-            count(*) FILTER (WHERE error IS NOT NULL) AS errors
-            FROM generation_runs WHERE created_at>now()-make_interval(mins=>%s)""",
-            (minutes,),
-        ).fetchone()
         serving = conn.execute(
             "SELECT id,activated_at FROM model_versions WHERE status='active'"
         ).fetchone()
@@ -84,9 +38,12 @@ def metrics(minutes: int = 60) -> dict:
             """SELECT name,control_model,treatment_model,started_at FROM experiments
             WHERE stopped_at IS NULL"""
         ).fetchone()
+        served = conn.execute(
+            """SELECT strategy,count(*) AS posts FROM served_posts
+            WHERE served_at>now()-interval '1 hour' GROUP BY strategy"""
+        ).fetchall()
     return {
-        "window_minutes": minutes,
-        "generation": runs,
         "active_model": serving,
         "experiment": experiment,
+        "served_last_hour": {row["strategy"]: row["posts"] for row in served},
     }

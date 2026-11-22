@@ -48,7 +48,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     with connection() as conn:
         conn.execute(
             "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,model_versions,"
-            "generation_runs,experiments,served_posts"
+            "experiments,served_posts"
         )
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")

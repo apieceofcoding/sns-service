@@ -6,13 +6,11 @@ import time
 from .config import settings
 from .experiment import assigned
 from .feed import publish
-from .measurement import measured
 from .profiles import build_user_vector
 from .ranking import diversify, rank
 from .retrieval import retrieve_candidates
 
 
-@measured
 def generate(user_id: int) -> dict:
     # A list that started later wins in Redis, so two runs for one user cannot go backwards.
     started = time.time()
@@ -42,11 +40,10 @@ def order(user_id: int, candidates: list[dict]) -> dict:
     retrieval_order = [c["id"] for c in candidates]
     if random.random() < settings().explore_rate:
         return {"ids": random.sample(retrieval_order, len(retrieval_order)), "strategy": "explore"}
-    group = assigned(user_id) or {"model": None, "spread": True}
+    group = assigned(user_id) or {"model": None}
     if "arm" in group and group["model"] is None:
         ranked = {"ids": retrieval_order, "strategy": "embedding"}
     else:
         ranked = rank(user_id, candidates, group["model"])
-    if group["spread"]:
-        ranked["ids"] = diversify(candidates, ranked["ids"])
+    ranked["ids"] = diversify(candidates, ranked["ids"])
     return {**ranked, "experiment": group.get("experiment"), "arm": group.get("arm")}

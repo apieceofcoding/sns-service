@@ -20,7 +20,7 @@ def main():
     post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
     post.add_argument("--post", type=int, default=1001)
     post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
-    for name in ("profile", "candidates", "generate", "benchmark"):
+    for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     commands.add_parser("recall").add_argument("--hours", type=float, default=1)
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
@@ -29,9 +29,6 @@ def main():
     experiment = commands.add_parser("experiment", help="A/B test: serving model vs candidate")
     experiment.add_argument("action", choices=["start", "run", "report", "stop"])
     experiment.add_argument("--name", help="default: exp-<month day hour minute>")
-    experiment.add_argument(
-        "--no-spread", action="store_true", help="treatment: same model, no author spreading"
-    )
     experiment.add_argument("--min-impressions", type=int, default=3000, help="per group")
     experiment.add_argument("--rounds", type=int, default=3)
     experiment.add_argument("--users", type=int, default=300)
@@ -107,12 +104,10 @@ def run(args):
 
         if args.action == "start":
             name = args.name or f"exp-{datetime.now(UTC):%m%d-%H%M}"
-            return experiment.start(name, not args.no_spread, args.min_impressions)
+            return experiment.start(name, args.min_impressions)
         if args.action == "run":
             return experiment.simulate_feed(args.rounds, args.users)
         if args.action == "stop":
             return experiment.stop()
         return experiment.report()
-    from .benchmark import benchmark
-
-    return benchmark(args.user)
+    raise ValueError(args.command)

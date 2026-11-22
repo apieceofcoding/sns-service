@@ -62,14 +62,6 @@ def recent_posts(user_id, reference, hours=48):
         ).fetchall()
 
 
-def authors(post_ids):
-    with source_connection() as conn:
-        rows = conn.execute(
-            "SELECT id,user_id FROM posts WHERE id=ANY(%s)", (list(post_ids),)
-        ).fetchall()
-    return {row["id"]: row["user_id"] for row in rows}
-
-
 def created_times(post_ids):
     with source_connection() as conn:
         rows = conn.execute(

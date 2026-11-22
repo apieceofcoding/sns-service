@@ -19,8 +19,8 @@ def health():
 
 
 @app.get("/metrics")
-def measurements(minutes: int = Query(60, ge=1, le=1440)):
-    return metrics(minutes)
+def measurements():
+    return metrics()
 
 
 @app.get("/internal/feeds/{user_id}")
