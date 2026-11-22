@@ -68,6 +68,6 @@ def main() -> None:
     while True:
         try:
             logger.info(json.dumps(retrain(), default=str))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning("Training failed: %s", exc)
         time.sleep(600)
