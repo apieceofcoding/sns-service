@@ -1,5 +1,3 @@
-"""Run with COURSE_DB_TESTS=1 against an empty, isolated SNS database."""
-
 import os
 from collections import Counter
 

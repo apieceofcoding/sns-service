@@ -15,7 +15,6 @@ interface ProfileMediaGridProps {
 export function ProfileMediaGrid({ posts, className }: ProfileMediaGridProps) {
   const router = useRouter()
 
-  // 미디어가 있는 게시글만 필터링하고 첫 번째 미디어 ID 추출
   const postsWithMedia = useMemo(() =>
     posts.filter(post => post.mediaIds && post.mediaIds.length > 0),
     [posts]
@@ -70,7 +69,6 @@ export function ProfileMediaGrid({ posts, className }: ProfileMediaGridProps) {
                       playsInline
                       preload="metadata"
                     />
-                    {/* 비디오/GIF 아이콘 표시 */}
                     <div className="absolute top-2 right-2 bg-black/60 rounded px-1.5 py-0.5 flex items-center gap-1">
                       {mediaType === 'GIF' ? (
                         <span className="text-white text-xs font-bold">GIF</span>
@@ -86,7 +84,6 @@ export function ProfileMediaGrid({ posts, className }: ProfileMediaGridProps) {
                     className="w-full h-full object-cover"
                   />
                 )}
-                {/* 호버 오버레이 */}
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               </>
             ) : null}

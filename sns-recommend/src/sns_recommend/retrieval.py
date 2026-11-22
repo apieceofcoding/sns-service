@@ -8,14 +8,12 @@ from .profiles import build_user_vector
 
 
 def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
-    """Candidate retrieval: semantic search plus latest and popular posts, at most k."""
     if not source.user_exists(user_id):
         raise LookupError("unknown user")
     return merge_candidates(candidate_pool(user_id, as_of or datetime.now(UTC), user_vector), k)
 
 
 def candidate_pool(user_id, reference, user_vector, seen_before=None):
-    """Recent posts the user has not seen, each with its similarity to the user vector."""
     posts = source.recent_posts(user_id, reference)
     excluded = excluded_ids(user_id, seen_before)
     similar = []
@@ -27,7 +25,6 @@ def candidate_pool(user_id, reference, user_vector, seen_before=None):
                 WHERE model=%s AND post_id=ANY(%s)""",
                 (vector_sql(user_vector), embedding_model(), [p["id"] for p in posts]),
             ).fetchall()
-    # A vector made from an older body is ignored until the post is indexed again.
     similarity = {(r["post_id"], r["content_version"]): r["similarity"] for r in similar}
     return [
         {**p, "similarity": similarity.get((p["id"], p["version"]))}
@@ -37,10 +34,6 @@ def candidate_pool(user_id, reference, user_vector, seen_before=None):
 
 
 def candidate_recall(hours: float = 1, k: int = 30) -> dict:
-    """Recall@k: of the posts readers clicked or liked in the last `hours`, the share that
-    was already in the candidates built from what was known before that window.
-
-    Popular uses today's like counts, so it gets a small head start."""
     as_of = datetime.now(UTC) - timedelta(hours=hours)
     with connection() as conn:
         reacted = conn.execute(
@@ -86,7 +79,6 @@ def merge_candidates(rows, k=30):
     )
     latest = sorted(rows, key=lambda r: (r["created_at"], r["id"]), reverse=True)[:10]
     popular = sorted(rows, key=lambda r: (r["likes"], r["id"]), reverse=True)[:10]
-    # Keep a few fresh and popular posts even when semantic search alone could fill k.
     supplement = min(5, k // 3)
     selected = {}
     for label, group in [

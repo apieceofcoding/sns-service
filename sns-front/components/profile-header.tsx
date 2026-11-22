@@ -50,7 +50,6 @@ export function ProfileHeader({ activeTab, onTabChange }: ProfileHeaderProps) {
         <div className="h-48 bg-gradient-to-r from-primary/20 to-primary/40" />
         <div className="px-4">
           <div className="flex justify-between items-start -mt-16 mb-4">
-            {/* 프로필 이미지 */}
             <div className="w-32 h-32 rounded-full border-4 border-background bg-muted overflow-hidden">
               {user?.profileImageUrl ? (
                 <img
@@ -120,7 +119,6 @@ export function ProfileHeader({ activeTab, onTabChange }: ProfileHeaderProps) {
         </Tabs>
       </div>
 
-      {/* 프로필 수정 다이얼로그 */}
       <ProfileEditDialog
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}

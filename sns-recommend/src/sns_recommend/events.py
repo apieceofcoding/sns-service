@@ -6,7 +6,6 @@ from .db import connection
 
 
 def excluded_ids(user_id: int, before: datetime | None = None) -> set[int]:
-    """Posts already shown to the user, optionally only those shown before `before`."""
     with connection() as conn:
         rows = conn.execute(
             """SELECT DISTINCT post_id FROM user_events WHERE user_id=%s

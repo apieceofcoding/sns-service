@@ -25,7 +25,6 @@ export function MediaGallery({ mediaIds, className }: MediaGalleryProps) {
     error: query.isError,
   }))
 
-  // 비디오가 하나만 있는 경우 특별 처리
   const hasOnlyOneVideo = mediaItems.length === 1 && mediaItems[0]?.mediaType === 'VIDEO'
 
   const getGridClassName = () => {
@@ -52,7 +51,6 @@ export function MediaGallery({ mediaIds, className }: MediaGalleryProps) {
   }
 
   const getAspectRatio = (index: number, mediaType: string | null) => {
-    // 비디오는 항상 16:9
     if (mediaType === 'VIDEO') {
       return "aspect-video"
     }
@@ -110,7 +108,6 @@ export function MediaGallery({ mediaIds, className }: MediaGalleryProps) {
                 className="w-full h-full object-cover hover:opacity-90 transition-opacity cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation()
-                  // Find the index of this image among all images (excluding videos)
                   const imageItems = mediaItems.filter(m => m.mediaType === 'IMAGE' && m.url)
                   const imageIndex = imageItems.findIndex(m => m.id === item.id)
                   if (imageIndex !== -1) {
@@ -124,7 +121,6 @@ export function MediaGallery({ mediaIds, className }: MediaGalleryProps) {
       ))}
     </div>
 
-    {/* Image Lightbox */}
     {lightboxIndex !== null && (
       <ImageLightbox
         images={mediaItems
