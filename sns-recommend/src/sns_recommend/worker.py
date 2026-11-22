@@ -1,5 +1,3 @@
-"""Rebuild recommendation lists on a schedule. No queue: each run finds who is due."""
-
 from __future__ import annotations
 
 import argparse
@@ -17,7 +15,6 @@ INTERVAL_SECONDS = 30
 
 
 def due_users() -> list[int]:
-    """Users active in the last 30 minutes whose list is missing or older than the refresh time."""
     with connection() as conn:
         rows = conn.execute(
             """SELECT DISTINCT user_id FROM user_events
@@ -38,7 +35,6 @@ def run_once() -> int:
             generate(user_id)
             generated += 1
         except Exception as exc:  # noqa: BLE001
-            # One user's failure must not stop the others. The next run tries again.
             logger.warning("User %s failed: %s", user_id, type(exc).__name__)
     return generated
 

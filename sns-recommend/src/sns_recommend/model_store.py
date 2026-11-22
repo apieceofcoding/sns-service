@@ -8,7 +8,6 @@ from .model import Ranker, load
 
 
 def serving_model() -> tuple[Ranker | None, str | None]:
-    """The trained model, or None when there is none or it used another embedding model."""
     path = Path(settings().model_dir) / "latest.pt"
     if not path.is_file():
         return None, None

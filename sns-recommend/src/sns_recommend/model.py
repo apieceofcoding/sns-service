@@ -54,7 +54,6 @@ class Ranker(nn.Module):
 def score(model: Ranker, batch: dict[str, torch.Tensor]) -> torch.Tensor:
     model.eval()
     with torch.no_grad():
-        # Score = click probability + like probability.
         return torch.sigmoid(model(batch)).sum(-1)
 
 
