@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import httpx
 
 from .config import settings
@@ -23,19 +21,9 @@ def embed(texts: list[str]) -> list[list[float]]:
         timeout=httpx.Timeout(cfg.model_timeout_seconds, connect=5),
     )
     response.raise_for_status()
-    rows = response.json().get("data")
-    if not isinstance(rows, list) or len(rows) != len(texts):
-        raise ValueError("invalid embedding response count")
-    rows = sorted(rows, key=lambda row: row.get("index", -1))
-    if [row.get("index") for row in rows] != list(range(len(texts))):
-        raise ValueError("invalid embedding response indices")
-    vectors = [row.get("embedding") for row in rows]
-    if any(
-        not isinstance(v, list)
-        or len(v) != cfg.dimensions
-        or any(type(x) not in (int, float) or not math.isfinite(x) for x in v)
-        or not any(v)
-        for v in vectors
-    ):
-        raise ValueError("invalid embedding dimensions or values")
+    vectors = [
+        row["embedding"] for row in sorted(response.json()["data"], key=lambda row: row["index"])
+    ]
+    if len(vectors) != len(texts) or any(len(v) != cfg.dimensions for v in vectors):
+        raise ValueError("invalid embedding response")
     return vectors
