@@ -3,16 +3,6 @@ from .db import source_connection
 VISIBLE = "deleted_at IS NULL AND parent_id IS NULL AND repost_id IS NULL"
 
 
-def user_exists(user_id):
-    with source_connection() as conn:
-        return (
-            conn.execute(
-                "SELECT id FROM users WHERE id=%s AND deleted_at IS NULL", (user_id,)
-            ).fetchone()
-            is not None
-        )
-
-
 def changed_posts(position, limit):
     with source_connection() as conn:
         return conn.execute(
