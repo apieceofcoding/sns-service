@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from .db import source_connection
 
 VISIBLE = "deleted_at IS NULL AND parent_id IS NULL AND repost_id IS NULL"
@@ -32,23 +30,4 @@ def posts_to_index(post_ids):
             f"""SELECT id,content AS body,content_version AS version,
             ({VISIBLE}) AS visible FROM posts WHERE id=ANY(%s) ORDER BY id""",
             (post_ids,),
-        ).fetchall()
-
-
-def current_versions(post_ids):
-    with source_connection() as conn:
-        rows = conn.execute(
-            f"SELECT id,content_version FROM posts WHERE id=ANY(%s) AND {VISIBLE}", (post_ids,)
-        ).fetchall()
-    return {row["id"]: row["content_version"] for row in rows}
-
-
-def recent_posts(user_id, reference, hours=48):
-    with source_connection() as conn:
-        return conn.execute(
-            f"""SELECT id,user_id AS author_id,content AS body,
-            content_version AS version,like_count AS likes,
-            created_at AT TIME ZONE 'UTC' AS created_at FROM posts
-            WHERE {VISIBLE} AND user_id<>%s AND created_at<=%s AND created_at>=%s""",
-            (user_id, reference, reference - timedelta(hours=hours)),
         ).fetchall()
