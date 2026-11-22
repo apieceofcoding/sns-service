@@ -6,10 +6,7 @@ import pytest
 
 from sns_recommend import (
     event_worker,
-    events,
     indexing,
-    profiles,
-    retrieval,
     seed,
     simulator,
     source,
@@ -54,18 +51,16 @@ def add_like(post_id: int = 1) -> int:
         ).fetchone()["id"]
 
 
-def test_like_is_copied_once_and_cancel_removes_it_from_the_vector() -> None:
+def test_like_is_copied_once_and_cancel_is_recorded() -> None:
     like_id = add_like()
     event_worker.poll_once()
     assert event_worker.sync_events() == 0
     assert [r["source_id"] for r in rows("like")] == [like_id]
-    assert profiles.build_user_vector(READER) is not None
 
     with source_connection() as conn:
         conn.execute("UPDATE likes SET deleted_at=now(),modified_at=now() WHERE id=%s", (like_id,))
     assert event_worker.sync_events() == 1
     assert rows("like")[0]["removed_at"] is not None
-    assert profiles.build_user_vector(READER) is None
 
 
 def test_reply_and_repost_target_the_original_post() -> None:
@@ -86,14 +81,14 @@ def test_reply_and_repost_target_the_original_post() -> None:
     assert rows("repost")[0]["post_id"] == 3
 
 
-def test_impression_excludes_post_and_click_is_copied() -> None:
+def test_impression_and_click_are_copied() -> None:
     with source_connection() as conn:
         conn.execute(
             "INSERT INTO post_actions(event_id,user_id,post_id,action) VALUES (%s,%s,5,'impression')",
             (uuid4(), READER),
         )
     event_worker.sync_events()
-    assert events.excluded_ids(READER) == {5}
+    assert [r["post_id"] for r in rows("impression")] == [5]
     with source_connection() as conn:
         conn.execute(
             "INSERT INTO post_actions(event_id,user_id,post_id,action) VALUES (%s,%s,6,'click')",
@@ -187,16 +182,6 @@ def test_simulated_readers_become_events_once() -> None:
         ).fetchone()["n"]
     assert copied == shown
     assert event_worker.drain()["events"] == 0
-
-
-def test_candidate_recall_uses_only_what_was_known_before() -> None:
-    simulator.simulate(users=40, sessions=10, hours=3)
-    event_worker.drain()
-    report = retrieval.candidate_recall(hours=1)
-    recall = report["recall@30"]
-    assert report["targets"] > 0
-    assert all(0 <= value <= 1 for value in recall.values())
-    assert recall["candidates"] > recall["random"]
 
 
 def test_late_event_keeps_its_time_and_is_still_copied() -> None:

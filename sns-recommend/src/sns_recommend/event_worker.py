@@ -115,7 +115,7 @@ def run_poller() -> None:
                 delay = 3
                 if not result["processed"]:
                     stop.wait(3)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning("Event worker retry in %ss: %s", delay, type(exc).__name__)
                 stop.wait(delay)
                 delay = min(delay * 2, 30)

@@ -16,9 +16,6 @@ def main():
     simulate.add_argument(
         "--shift", action="store_true", help="from now on readers favor fresh posts far more"
     )
-    for name in ("profile", "candidates"):
-        commands.add_parser(name).add_argument("--user", type=int, default=7)
-    commands.add_parser("recall").add_argument("--hours", type=float, default=1)
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
@@ -37,22 +34,6 @@ def run(args):
         from .simulator import simulate
 
         return simulate(args.users, args.sessions, args.hours, args.shift)
-    if args.command == "profile":
-        from .profiles import build_user_vector
-
-        vector = build_user_vector(args.user)
-        return {"user_id": args.user, "ready": vector is not None}
-    if args.command == "candidates":
-        from .profiles import build_user_vector
-        from .retrieval import retrieve_candidates
-
-        rows = retrieve_candidates(args.user, user_vector=build_user_vector(args.user))
-        keys = ("id", "author_id", "similarity", "sources")
-        return [{k: row[k] for k in keys} for row in rows]
-    if args.command == "recall":
-        from .retrieval import candidate_recall
-
-        return candidate_recall(args.hours)
     if args.command == "train":
         from .training import train
 
