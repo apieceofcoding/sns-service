@@ -8,7 +8,6 @@ from threading import Event
 from types import FrameType
 
 from .db import connection, source_connection
-from .event_queue import enqueue
 from .indexing import index_changes
 from .sync_cursor import load_position, next_position, save_position, settled_before
 
@@ -42,7 +41,6 @@ ACTION_SOURCES = (
         ORDER BY recorded_at,id LIMIT %s""",
     ),
 )
-REFRESH_ACTIONS = {"like", "reply", "repost", "click"}
 
 
 def sync_source(name, query):
@@ -81,10 +79,7 @@ def sync_source(name, query):
 
 
 def sync_events() -> int:
-    changed = [row for source in ACTION_SOURCES for row in sync_source(*source)]
-    for user_id in {row["user_id"] for row in changed if row["action"] in REFRESH_ACTIONS}:
-        enqueue(user_id)
-    return len(changed)
+    return sum(len(sync_source(*source)) for source in ACTION_SOURCES)
 
 
 def poll_once() -> dict[str, int]:

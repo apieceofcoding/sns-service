@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     model_dir: str = "models"
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
-    minimum_refresh_seconds: int = 60
-    lease_seconds: int = 120
     promote_margin: float = 0.01
     retrain_min_sessions: int = 200
     train_sessions: int = 2400
