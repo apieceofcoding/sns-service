@@ -23,7 +23,11 @@ def measurements():
 
 
 @app.get("/internal/feeds/{user_id}")
-def feed(user_id: int, limit: int = Query(20, ge=1, le=50), cursor: str | None = Query(None, max_length=512)):
+def feed(
+    user_id: int,
+    limit: int = Query(20, ge=1, le=50),
+    cursor: str | None = Query(None, max_length=512),
+):
     try:
         result = read_feed(user_id, limit, cursor, excluded_ids(user_id), alive=source.alive_ids)
         try:
