@@ -260,26 +260,21 @@ POSTS: dict[str, tuple[str, ...]] = {
 
 def post_body(topic: str, ordinal: int) -> str:
     posts = POSTS[topic]
-    extra = ordinal // len(posts)
-    if not 0 <= extra < len(posts):
-        raise ValueError("post ordinal must be between 0 and 1599")
     first = posts[ordinal % len(posts)]
+    extra = ordinal // len(posts)
     if extra == 0:
         return first
     return f"{first} {posts[(ordinal + 7 * extra) % len(posts)]}"
 
 
-def post_created_at(post_id: int, reference: datetime, group_size: int = 5) -> datetime:
-    if group_size < 1 or post_id < 1:
-        raise ValueError("post id and group size must be positive")
-    if reference.utcoffset() is None:
-        raise ValueError("reference must include a timezone")
-    if post_id <= group_size:
-        return reference - timedelta(hours=48, minutes=1)
-    if post_id <= 2 * group_size:
-        return reference - timedelta(hours=48)
-    if post_id <= 3 * group_size:
-        return reference - timedelta(hours=47, minutes=59)
-    if post_id <= 4 * group_size:
-        return reference + timedelta(minutes=1)
-    return reference - timedelta(minutes=post_id - 4 * group_size)
+def post_created_at(post_id: int, reference: datetime, group_size: int = 6) -> datetime:
+    edges = (
+        timedelta(hours=48, minutes=1),
+        timedelta(hours=48),
+        timedelta(hours=47, minutes=59),
+        timedelta(minutes=-1),
+    )
+    group = (post_id - 1) // group_size
+    if group < len(edges):
+        return reference - edges[group]
+    return reference - timedelta(minutes=post_id - len(edges) * group_size)
