@@ -75,8 +75,8 @@ def compare(batch: dict[str, torch.Tensor], models: dict[str, Ranker]) -> dict[s
     return report
 
 
-def prepare(until=None) -> tuple[list[dict], dict[int, dict]]:
-    sessions = build_sessions(load_events(until))
+def prepare() -> tuple[list[dict], dict[int, dict]]:
+    sessions = build_sessions(load_events())
     ids = {p for s in sessions for p in s["candidates"]}
     ids |= {h[0] for s in sessions for h in s["history"]}
     return sessions, post_features(ids)
