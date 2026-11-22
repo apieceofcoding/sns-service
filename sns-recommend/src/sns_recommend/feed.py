@@ -1,5 +1,4 @@
 import base64
-import hmac
 import json
 import time
 from uuid import uuid4
@@ -8,19 +7,12 @@ from redis import Redis
 
 from .config import settings
 
+# Save only when no newer generation is current, so a run that finished late cannot go back.
 PUBLISH = """
-local existing = redis.call('GET', KEYS[1])
-if existing and existing ~= ARGV[1] then return -1 end
 local current = redis.call('GET', KEYS[2])
-if current and tonumber(cjson.decode(current).generation or 0) > tonumber(ARGV[3]) then return 0 end
-local ttl = tonumber(ARGV[2])
-if existing then
-  ttl = redis.call('TTL', KEYS[1])
-  if ttl < 1 then return 0 end
-else
-  redis.call('SET', KEYS[1], ARGV[1], 'EX', ttl)
-end
-redis.call('SET', KEYS[2], ARGV[1], 'EX', ttl)
+if current and tonumber(cjson.decode(current).generation) > tonumber(ARGV[3]) then return 0 end
+redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])
 return 1
 """
 
@@ -55,18 +47,8 @@ def publish(
         "created_at": created_at or time.time(),
     }
     encoded = json.dumps(payload, sort_keys=True)
-    code = redis_client().eval(
-        PUBLISH,
-        2,
-        f"recommend:feed:{user_id}:{snapshot_id}",
-        f"recommend:current:{user_id}",
-        encoded,
-        settings().snapshot_ttl,
-        generation,
-    )
-    if code == -1:
-        raise ValueError("snapshotId reused with different content")
-    return code == 1
+    keys = (f"recommend:feed:{user_id}:{snapshot_id}", f"recommend:current:{user_id}")
+    return redis_client().eval(PUBLISH, 2, *keys, encoded, settings().snapshot_ttl, generation) == 1
 
 
 def current_created_at(user_id):
@@ -75,19 +57,13 @@ def current_created_at(user_id):
 
 
 def cursor_encode(user_id, snapshot_id, offset):
-    raw = json.dumps([user_id, snapshot_id, offset], separators=(",", ":")).encode()
-    signature = hmac.digest(settings().cursor_secret.encode(), raw, "sha256")
-    return base64.urlsafe_b64encode(raw + signature).decode()
+    raw = json.dumps([user_id, snapshot_id, offset], separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode()).decode()
 
 
 def cursor_decode(cursor, user_id):
     try:
-        blob = base64.urlsafe_b64decode(cursor)
-        raw, sig = blob[:-32], blob[-32:]
-        expected = hmac.digest(settings().cursor_secret.encode(), raw, "sha256")
-        if not hmac.compare_digest(sig, expected):
-            raise ValueError()
-        owner, snapshot, offset = json.loads(raw)
+        owner, snapshot, offset = json.loads(base64.urlsafe_b64decode(cursor))
         if owner != user_id or not isinstance(offset, int) or offset < 0:
             raise ValueError()
         return snapshot, offset

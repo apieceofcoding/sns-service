@@ -2,13 +2,13 @@ import argparse
 import json
 from datetime import UTC, datetime
 
-from .db import initialize, source_connection
+from .db import initialize
 
 
 def main():
     parser = argparse.ArgumentParser(prog="sns-recommend")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "seed", "status", "models", "rollback"):
+    for name in ("init", "seed", "models", "rollback"):
         commands.add_parser(name)
     simulate = commands.add_parser("simulate", help="synthetic readers see posts and react")
     simulate.add_argument("--users", type=int, default=300)
@@ -17,15 +17,12 @@ def main():
     simulate.add_argument(
         "--shift", action="store_true", help="from now on readers favor fresh posts far more"
     )
-    post = commands.add_parser("source-post", help="create or edit a post in the SNS database")
-    post.add_argument("--post", type=int, default=1001)
-    post.add_argument("--body", default="Python PostgreSQL 백엔드 실습")
     for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     commands.add_parser("recall").add_argument("--hours", type=float, default=1)
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
-    commands.add_parser("promote").add_argument("--version", type=int, required=True)
     commands.add_parser("monitor").add_argument("--hours", type=float, default=1)
+    commands.add_parser("promote").add_argument("--version", type=int, required=True)
     experiment = commands.add_parser("experiment", help="A/B test: serving model vs candidate")
     experiment.add_argument("action", choices=["start", "run", "report", "stop"])
     experiment.add_argument("--name", help="default: exp-<month day hour minute>")
@@ -45,20 +42,10 @@ def run(args):
 
         initialize()
         return seed()
-    if args.command == "status":
-        with source_connection() as conn:
-            return {
-                "posts": conn.execute("SELECT count(*) AS n FROM posts").fetchone()["n"],
-                "users": conn.execute("SELECT count(*) AS n FROM users").fetchone()["n"],
-            }
     if args.command == "simulate":
         from .simulator import simulate
 
         return simulate(args.users, args.sessions, args.hours, args.shift)
-    if args.command == "source-post":
-        from .source_demo import change_post
-
-        return change_post(args.post, args.body)
     if args.command == "profile":
         from .profiles import build_user_vector
 
@@ -87,10 +74,6 @@ def run(args):
         from .registry import versions
 
         return versions()
-    if args.command == "promote":
-        from .registry import promote
-
-        return promote(args.version)
     if args.command == "rollback":
         from .registry import rollback
 
@@ -99,6 +82,10 @@ def run(args):
         from .trainer import monitor
 
         return monitor(args.hours)
+    if args.command == "promote":
+        from .registry import promote
+
+        return promote(args.version)
     if args.command == "experiment":
         from . import experiment
 

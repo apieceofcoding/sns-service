@@ -11,7 +11,7 @@ def test_cursor_cannot_move_to_another_user():
     with pytest.raises(ValueError):
         cursor_decode(cursor, 2)
     with pytest.raises(ValueError):
-        cursor_decode(cursor[:-4] + "AAAA", 1)
+        cursor_decode("not-a-cursor", 1)
 
 
 def test_feed_rejects_limit_out_of_range():

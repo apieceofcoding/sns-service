@@ -154,8 +154,6 @@ uv run sns-recommend-event-worker --once
 curl -fsS -c cookies.txt -X POST http://localhost:8080/api/v1/login -d 'username=recommenddemo&password=recommend1234'
 # 클릭 기록. 같은 행동을 재전송할 때는 같은 eventId 사용
 curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions -H 'Content-Type: application/json' -d '{"eventId":"03b9e8fe-a243-48b8-9048-11c48ce52001","action":"click","postId":4}'
-# 글을 고치면 버전이 올라가고 다시 임베딩
-uv run sns-recommend source-post --post 1001
 uv run sns-recommend-event-worker --once
 ```
 
@@ -397,5 +395,3 @@ DIMENSIONS=768
 | 순위 트랜스포머 (PyTorch, 직접 학습) | 행동과 후보로 반응 확률 예측 | 파라미터 약 15만 개, 파일 약 600KB |
 
 순위 모델은 GPU 없이 학습합니다. 학습 중 메모리는 1GB 안쪽이고, 사용자 한 명의 후보 30개 점수 계산은 1ms 미만이에요. `fixture` 모드는 자동 검사용 키워드 벡터이며 품질 평가에 사용하지 않습니다. 임베딩 모델을 바꾸면 다시 색인하고, 이전 벡터로 학습한 순위 모델은 쓰지 않아요.
-
-Docker worker에서는 `MODEL_BASE_URL=http://host.docker.internal:11434/v1`을 사용합니다. Ollama도 Docker에서 접근할 수 있는 호스트 주소에 리스닝해야 해요. [호스트 설정](https://docs.ollama.com/faq)

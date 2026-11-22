@@ -52,36 +52,34 @@ def post_fields(post_id: int) -> tuple[int, str]:
 
 def seed():
     now = datetime.now(UTC)
+    users = [(user_id, username, now, now) for user_id, username in USERNAMES.items()]
+    posts = [
+        (i, *post_fields(i), (i * 17) % 101, post_created_at(i, now), now)
+        for i in range(1, POSTS + 1)
+    ]
     with source_connection() as conn:
-        for user_id, username in USERNAMES.items():
-            existing = conn.execute("SELECT username FROM users WHERE id=%s", (user_id,)).fetchone()
-            if existing and existing["username"] != username:
-                raise ValueError(f"seed user ID {user_id} is already used by another account")
-            conn.execute(
-                """INSERT INTO users(id,username,created_at,modified_at)
-                VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
-                (user_id, username, now, now),
-            )
-        for i in range(1, POSTS + 1):
-            author_id, body = post_fields(i)
-            existing = conn.execute("SELECT user_id FROM posts WHERE id=%s", (i,)).fetchone()
-            if existing and existing["user_id"] != author_id:
-                raise ValueError(
-                    f"seed post ID {i} conflicts with existing data; use a fresh course database"
-                )
-            conn.execute(
-                """INSERT INTO posts(id,user_id,content,like_count,repost_count,reply_count,
-                view_count,created_at,modified_at)
-                VALUES (%s,%s,%s,%s,0,0,0,%s,%s) ON CONFLICT DO NOTHING""",
-                (i, author_id, body, (i * 17) % 101, post_created_at(i, now, group_size=6), now),
-            )
+        cursor = conn.cursor()
+        cursor.executemany(
+            """INSERT INTO users(id,username,created_at,modified_at)
+            VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            users,
+        )
+        cursor.executemany(
+            """INSERT INTO posts(id,user_id,content,like_count,repost_count,reply_count,
+            view_count,created_at,modified_at)
+            VALUES (%s,%s,%s,%s,0,0,0,%s,%s) ON CONFLICT DO NOTHING""",
+            posts,
+        )
+        stored_users = conn.execute(
+            "SELECT id,username FROM users WHERE id=ANY(%s)", (list(USERNAMES),)
+        )
+        stored_posts = conn.execute("SELECT id,user_id FROM posts WHERE id<=%s", (POSTS,))
+        if {row["id"]: row["username"] for row in stored_users} != USERNAMES or any(
+            row["user_id"] != post_fields(row["id"])[0] for row in stored_posts
+        ):
+            raise ValueError("seed IDs are already used by other data; use a fresh course database")
         advance_identity(conn, "users", "posts")
-    return {
-        "users": len(USERNAMES),
-        "posts": POSTS,
-        "data": "synthetic",
-        "reference_time": now.isoformat(),
-    }
+    return {"users": len(USERNAMES), "posts": POSTS, "reference_time": now.isoformat()}
 
 
 def advance_identity(conn, *tables):

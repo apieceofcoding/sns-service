@@ -18,7 +18,7 @@ ACTIONS = {action: i + 1 for i, action in enumerate(POSITIVE)}
 LABELS = ("click", "like")
 
 
-def load_events(until: datetime | None = None) -> list[dict]:
+def load_events() -> list[dict]:
     with connection() as conn:
         return conn.execute(
             """SELECT e.user_id,e.post_id,e.action,e.occurred_at,
@@ -26,9 +26,8 @@ def load_events(until: datetime | None = None) -> list[dict]:
             FROM user_events e LEFT JOIN served_posts s
             ON e.action='impression' AND s.user_id=e.user_id AND s.post_id=e.post_id
             WHERE e.action=ANY(%s) AND e.removed_at IS NULL
-            AND (%s::timestamptz IS NULL OR e.occurred_at<=%s)
             ORDER BY e.user_id,e.occurred_at,e.post_id""",
-            (["impression", *POSITIVE], until, until),
+            (["impression", *POSITIVE],),
         ).fetchall()
 
 
