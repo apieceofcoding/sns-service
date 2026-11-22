@@ -1,3 +1,5 @@
+"""Rebuild recommendation lists on a schedule. No queue: each run finds who is due."""
+
 from __future__ import annotations
 
 import argparse
@@ -5,51 +7,58 @@ import json
 import logging
 import time
 
-import psycopg
-from redis.exceptions import RedisError
-
-from .event_queue import claim, heartbeat, retry, schedule_active
+from .config import settings
+from .db import connection
+from .feed import current_created_at
 from .generation import generate
 
 logger = logging.getLogger(__name__)
+INTERVAL_SECONDS = 30
 
 
-def run_one() -> bool:
-    event = claim()
-    if event is None:
-        return False
-    try:
-        with heartbeat(event):
-            generate(event)
-    except Exception as exc:
-        logger.warning("Event %s failed: %s", event["id"], type(exc).__name__)
-        retry(event)
-    return True
+def due_users() -> list[int]:
+    """Users active in the last 30 minutes whose list is missing or older than the refresh time."""
+    with connection() as conn:
+        rows = conn.execute(
+            """SELECT DISTINCT user_id FROM user_events
+            WHERE occurred_at>now()-interval '30 minutes' ORDER BY user_id"""
+        ).fetchall()
+    due = []
+    for row in rows:
+        created_at = current_created_at(row["user_id"])
+        if created_at is None or time.time() - created_at >= settings().refresh_seconds:
+            due.append(row["user_id"])
+    return due
+
+
+def run_once() -> int:
+    generated = 0
+    for user_id in due_users():
+        try:
+            generate(user_id)
+            generated += 1
+        except Exception as exc:  # noqa: BLE001
+            # One user's failure must not stop the others. The next run tries again.
+            logger.warning("User %s failed: %s", user_id, type(exc).__name__)
+    return generated
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--once", action="store_true", help="process waiting requests, then exit")
+    parser.add_argument("--once", action="store_true", help="rebuild due lists once, then exit")
     args = parser.parse_args()
     if args.once:
-        processed = 0
-        while run_one():
-            processed += 1
-        print(json.dumps({"processed": processed}))
+        print(json.dumps({"generated": run_once()}))
         return
-    last_schedule = 0.0
     while True:
         try:
-            if time.monotonic() - last_schedule >= 30:
-                schedule_active()
-                last_schedule = time.monotonic()
-            processed = run_one()
-        except (psycopg.Error, RedisError) as exc:
-            logger.warning("Worker storage unavailable: %s", type(exc).__name__)
-            processed = False
-        if not processed:
-            time.sleep(1)
+            generated = run_once()
+            if generated:
+                logger.info("generated=%s", generated)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Worker retry: %s", type(exc).__name__)
+        time.sleep(INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":

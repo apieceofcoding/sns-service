@@ -83,9 +83,9 @@ def run(args):
 
         return retrain(force=True, epochs=args.epochs)
     if args.command == "generate":
-        from .generation import generate_for_user
+        from .generation import generate
 
-        return generate_for_user(args.user)
+        return generate(args.user)
     if args.command == "models":
         from .registry import versions
 

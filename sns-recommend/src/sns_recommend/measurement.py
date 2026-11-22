@@ -6,17 +6,14 @@ from functools import wraps
 from .db import connection
 
 
-def record_generation(event: dict, duration_ms: float, result: dict | None, error: str = ""):
+def record_generation(user_id: int, duration_ms: float, result: dict | None, error: str = ""):
     result = result or {}
     with connection() as conn:
         conn.execute(
-            """INSERT INTO generation_runs(event_id,user_id,strategy,model_version,duration_ms,
-            published,error) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(event_id) DO UPDATE SET
-            strategy=EXCLUDED.strategy,model_version=EXCLUDED.model_version,
-            duration_ms=EXCLUDED.duration_ms,published=EXCLUDED.published,error=EXCLUDED.error""",
+            """INSERT INTO generation_runs(user_id,strategy,model_version,duration_ms,
+            published,error) VALUES (%s,%s,%s,%s,%s,%s)""",
             (
-                event["id"],
-                event["user_id"],
+                user_id,
                 result.get("strategy"),
                 result.get("model_version"),
                 duration_ms,
@@ -28,15 +25,15 @@ def record_generation(event: dict, duration_ms: float, result: dict | None, erro
 
 def measured(generate):
     @wraps(generate)
-    def wrapper(event: dict) -> dict:
+    def wrapper(user_id: int) -> dict:
         started = time.perf_counter()
         try:
-            result = generate(event)
+            result = generate(user_id)
         except Exception as exc:
             elapsed = (time.perf_counter() - started) * 1000
-            record_generation(event, elapsed, None, type(exc).__name__)
+            record_generation(user_id, elapsed, None, type(exc).__name__)
             raise
-        record_generation(event, (time.perf_counter() - started) * 1000, result)
+        record_generation(user_id, (time.perf_counter() - started) * 1000, result)
         return result
 
     return wrapper

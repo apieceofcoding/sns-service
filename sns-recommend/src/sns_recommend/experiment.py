@@ -59,7 +59,7 @@ def start(name: str, spread: bool = True, min_impressions: int = 3000) -> dict:
 
 
 def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
-    from .generation import generate_for_user
+    from .generation import generate
 
     if running() is None:
         raise LookupError("start an experiment first")
@@ -75,7 +75,7 @@ def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
         rows: tuple[list, list, list] = ([], [], [])
         for user_id in reader_ids:
             try:
-                generate_for_user(user_id)
+                generate(user_id)
             except (LookupError, RuntimeError):
                 continue
             feed = read_feed(

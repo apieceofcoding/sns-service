@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS generation_runs (
- event_id uuid PRIMARY KEY,
+ id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
  user_id bigint NOT NULL,
  strategy text,
  model_version bigint,
