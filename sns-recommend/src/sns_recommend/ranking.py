@@ -28,13 +28,15 @@ def rank(user_id: int, candidates: list[dict]) -> dict:
     history = recent_history(user_id)
     features = post_features(retrieval_order + [h[0] for h in history])
     scored = [i for i in retrieval_order if i in features]
+    if not scored:
+        return {"ids": retrieval_order, "scores": None, "strategy": "embedding"}
     session = {
         "start": datetime.now(UTC),
         "history": history,
         "candidates": scored,
         "labels": [[0.0] * len(LABELS)] * len(scored),
     }
-    values = score(model, encode([session], features))[0][: len(scored)].tolist() if scored else []
+    values = score(model, encode([session], features))[0][: len(scored)].tolist()
     if len(values) != len(scored) or not all(math.isfinite(v) for v in values):
         return {"ids": retrieval_order, "scores": None, "strategy": "embedding_fallback"}
     scores = dict(zip(scored, values, strict=True))
