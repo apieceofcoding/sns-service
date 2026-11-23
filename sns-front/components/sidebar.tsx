@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, User, MoreHorizontal, Feather, LogOut } from "lucide-react"
+import { Bell, Bookmark, Feather, Home, LogOut, Mail, MoreHorizontal, Search, User, Users, CircleEllipsis } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -13,9 +13,16 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/api/use-auth"
 import { UserAvatar } from "./user-avatar"
 
+// Only 홈 and 프로필 are part of the course; the rest open an empty page so the menu looks complete.
 const navItems = [
   { icon: Home, label: "홈", href: "/" },
+  { icon: Search, label: "탐색하기", href: "/explore" },
+  { icon: Bell, label: "알림", href: "/notifications" },
+  { icon: Mail, label: "채팅", href: "/messages" },
+  { icon: Bookmark, label: "북마크", href: "/bookmarks" },
+  { icon: Users, label: "커뮤니티", href: "/communities" },
   { icon: User, label: "프로필", href: "/profile" },
+  { icon: CircleEllipsis, label: "더 보기", href: "/more" },
 ]
 
 export function Sidebar() {
