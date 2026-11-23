@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { usersApi } from '@/lib/api/users'
+import { usersApi, type FollowListKind } from '@/lib/api/users'
 
 export function useUser(userId: number, enabled: boolean = true) {
   return useQuery({
@@ -32,5 +32,12 @@ export function useUserFollowCounts(userId: number, enabled: boolean = true) {
     queryKey: ['users', userId, 'follow-counts'],
     queryFn: () => usersApi.getFollowCounts(userId),
     enabled,
+  })
+}
+
+export function useUserFollows(userId: number, kind: FollowListKind) {
+  return useQuery({
+    queryKey: ['users', userId, kind],
+    queryFn: () => usersApi.getFollows(userId, kind),
   })
 }

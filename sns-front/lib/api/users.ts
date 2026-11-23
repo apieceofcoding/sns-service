@@ -1,4 +1,6 @@
 import { apiClient } from './client'
+
+export type FollowListKind = 'followers' | 'following'
 import type { User, UserSignupRequest, UserResponse, Post, Reply, FollowCountResponse } from '@/lib/types'
 
 export const usersApi = {
@@ -20,6 +22,10 @@ export const usersApi = {
 
   getReplies: (userId: number) => {
     return apiClient.get<Reply[]>(`/api/v1/users/${userId}/replies`)
+  },
+
+  getFollows: (userId: number, kind: FollowListKind) => {
+    return apiClient.get<UserResponse[]>(`/api/v1/users/${userId}/${kind}`)
   },
 
   getFollowCounts: (userId: number) => {
