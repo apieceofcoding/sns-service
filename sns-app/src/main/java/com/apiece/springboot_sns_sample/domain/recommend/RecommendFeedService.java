@@ -14,14 +14,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RecommendFeedService {
 
-    private final RecommendFeedClient client;
-    private final PostRepository posts;
+    private final RecommendFeedClient recommendFeedClient;
+    private final PostRepository postRepository;
 
     public Page get(long userId, int limit, String cursor) {
-        var feed = client.get(userId, limit, cursor);
+        var feed = recommendFeedClient.get(userId, limit, cursor);
         if (!feed.ready()) return new Page(List.of(), null, "pending");
         var found = feed.postIds().isEmpty() ? List.<Post>of()
-                : posts.findAllByIdInAndDeletedAtIsNull(feed.postIds());
+                : postRepository.findAllByIdInAndDeletedAtIsNull(feed.postIds());
         var byId = found.stream().collect(Collectors.toMap(Post::getId, Function.identity()));
         var ordered = feed.postIds().stream().map(byId::get).filter(Objects::nonNull).toList();
         return new Page(ordered, feed.nextCursor(), "recommend");

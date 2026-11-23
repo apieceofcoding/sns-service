@@ -1,6 +1,7 @@
 package com.apiece.springboot_sns_sample.controller;
 
 import com.apiece.springboot_sns_sample.config.auth.AuthUser;
+import com.apiece.springboot_sns_sample.domain.recommend.RecommendAction;
 import com.apiece.springboot_sns_sample.domain.recommend.RecommendActionRepository;
 import com.apiece.springboot_sns_sample.domain.user.User;
 import org.junit.jupiter.api.Test;
@@ -18,13 +19,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class RecommendActionControllerTest {
-    private final RecommendActionRepository actions = mock(RecommendActionRepository.class);
+    private final RecommendActionRepository recommendActionRepository = mock(RecommendActionRepository.class);
     private final UUID eventId = UUID.randomUUID();
 
     private MockMvc mvc(Long userId) {
         User user = userId == null ? null : User.create("reader", "");
         if (user != null) ReflectionTestUtils.setField(user, "id", userId);
-        return MockMvcBuilders.standaloneSetup(new RecommendActionController(actions))
+        return MockMvcBuilders.standaloneSetup(new RecommendActionController(recommendActionRepository))
             .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                 public boolean supportsParameter(MethodParameter parameter) {
                     return parameter.hasParameterAnnotation(AuthUser.class);
@@ -39,7 +40,7 @@ class RecommendActionControllerTest {
         mvc(7L).perform(post("/api/v1/recommend/actions?userId=999").contentType("application/json")
             .content("{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":4,\"userId\":999}"))
             .andExpect(status().isNoContent());
-        verify(actions).record(eventId, "click", 7L, 4L);
+        verify(recommendActionRepository).record(eventId, RecommendAction.CLICK, 7L, 4L);
     }
 
     @Test
@@ -47,7 +48,7 @@ class RecommendActionControllerTest {
         mvc(null).perform(post("/api/v1/recommend/actions").contentType("application/json")
             .content("{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":4}"))
             .andExpect(status().isUnauthorized());
-        verifyNoInteractions(actions);
+        verifyNoInteractions(recommendActionRepository);
     }
 
     @Test
@@ -59,6 +60,6 @@ class RecommendActionControllerTest {
             "{\"action\":\"click\",\"postId\":4}"
         }) mvc.perform(post("/api/v1/recommend/actions").contentType("application/json").content(body))
                 .andExpect(status().isBadRequest());
-        verifyNoInteractions(actions);
+        verifyNoInteractions(recommendActionRepository);
     }
 }

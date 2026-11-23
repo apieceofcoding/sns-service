@@ -15,12 +15,12 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequiredArgsConstructor
 public class RecommendActionController {
-    private final RecommendActionRepository actions;
+    private final RecommendActionRepository recommendActionRepository;
 
     @PostMapping("/api/v1/recommend/actions")
     public ResponseEntity<Void> create(@AuthUser User user, @RequestBody RecommendActionRequest request) {
         if (user == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        actions.record(request.eventId(), request.action(), user.getId(), request.postId());
+        recommendActionRepository.record(request.eventId(), request.action(), user.getId(), request.postId());
         return ResponseEntity.noContent().build();
     }
 }

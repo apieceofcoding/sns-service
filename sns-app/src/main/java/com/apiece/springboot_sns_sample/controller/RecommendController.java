@@ -18,16 +18,16 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class RecommendController {
 
-    private final RecommendFeedService recommend;
-    private final PostService posts;
+    private final RecommendFeedService recommendFeedService;
+    private final PostService postService;
 
     @GetMapping("/api/v1/recommend")
     public ResponseEntity<RecommendResponse> get(@AuthUser User user,
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit) {
         if (user == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        var page = recommend.get(user.getId(), Math.clamp(limit, 1, 50), cursor);
-        var result = posts.enrichWithUserContext(page.posts(), user).stream().map(PostResponse::from).toList();
+        var page = recommendFeedService.get(user.getId(), Math.clamp(limit, 1, 50), cursor);
+        var result = postService.enrichWithUserContext(page.posts(), user).stream().map(PostResponse::from).toList();
         return ResponseEntity.ok(new RecommendResponse(result, page.nextCursor(),
                 page.nextCursor() != null, page.mode()));
     }
