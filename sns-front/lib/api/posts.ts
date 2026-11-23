@@ -18,7 +18,7 @@ export const postsApi = {
     return apiClient.post<void>(`/api/v1/posts/${id}/view`)
   },
 
-  recordAction: (action: "impression" | "click", postId: number) => {
+  recordAction: (action: "IMPRESSION" | "CLICK", postId: number) => {
     return apiClient
       .post<void>("/api/v1/recommend/actions", { eventId: crypto.randomUUID(), action, postId })
       .catch(() => undefined)
