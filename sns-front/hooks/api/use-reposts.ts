@@ -1,16 +1,9 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { repostsApi } from '@/lib/api/reposts'
 import type { Post } from '@/lib/types'
-
-export function useReposts() {
-  return useQuery({
-    queryKey: ['reposts'],
-    queryFn: () => repostsApi.getAll(),
-  })
-}
 
 export function useRepost() {
   const queryClient = useQueryClient()
@@ -44,7 +37,7 @@ export function useRepost() {
 
       return { previousPosts, previousTimeline }
     },
-    onError: (error, postId, context) => {
+    onError: (_error, postId, context) => {
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -52,7 +45,6 @@ export function useRepost() {
         queryClient.setQueryData(['timeline'], context.previousTimeline)
       }
       toast.error('리포스트 실패')
-      console.error('Repost error:', error)
     },
     onSuccess: () => {
       toast.success('리포스트했습니다!')
@@ -96,7 +88,7 @@ export function useUnrepost() {
 
       return { previousPosts, previousTimeline }
     },
-    onError: (error, variables, context) => {
+    onError: (_error, variables, context) => {
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -104,7 +96,6 @@ export function useUnrepost() {
         queryClient.setQueryData(['timeline'], context.previousTimeline)
       }
       toast.error('리포스트 취소 실패')
-      console.error('Unrepost error:', error)
     },
     onSuccess: () => {
       toast.success('리포스트를 취소했습니다!')

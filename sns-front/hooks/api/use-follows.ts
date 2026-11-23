@@ -4,29 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { followsApi } from '@/lib/api/follows'
 
-export function useFollowers() {
-  return useQuery({
-    queryKey: ['follows', 'followers'],
-    queryFn: () => followsApi.getFollowers(),
-  })
-}
-
-export function useFollowees() {
-  return useQuery({
-    queryKey: ['follows', 'followees'],
-    queryFn: () => followsApi.getFollowees(),
-  })
-}
-
-export function useFollowCounts(enabled: boolean = true) {
-  return useQuery({
-    queryKey: ['follow-counts'],
-    queryFn: () => followsApi.getFollowCounts(),
-    enabled,
-    retry: false,
-  })
-}
-
 export function useFollow() {
   const queryClient = useQueryClient()
 
@@ -38,9 +15,8 @@ export function useFollow() {
       queryClient.invalidateQueries({ queryKey: ['follows', 'isFollowing', followeeId] })
       toast.success('팔로우했습니다!')
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('팔로우 실패')
-      console.error('Follow error:', error)
     },
   })
 }
@@ -56,9 +32,8 @@ export function useUnfollow() {
       queryClient.invalidateQueries({ queryKey: ['follows', 'isFollowing', followeeId] })
       toast.success('언팔로우했습니다!')
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('언팔로우 실패')
-      console.error('Unfollow error:', error)
     },
   })
 }

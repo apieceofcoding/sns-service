@@ -18,9 +18,9 @@ export interface Post {
   likeIdByMe: number | null
   isRepostedByMe: boolean
   repostIdByMe: number | null
-  repostedPost?: Post | null       // 재게시의 원본 게시물
-  quotedPost?: Post | null         // 인용된 게시물
-  parentPost?: Post | null         // 답글의 부모 게시물
+  repostedPost?: Post | null
+  quotedPost?: Post | null
+  parentPost?: Post | null
   repostedBy?: {
     userId: number
     username: string
@@ -30,8 +30,4 @@ export interface Post {
 export interface PostCreateRequest {
   content: string
   mediaIds: number[]
-}
-
-export interface PostUpdateRequest {
-  content: string
 }
