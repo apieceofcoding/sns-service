@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     model_dir: str = "models"
     snapshot_ttl: int = 1800
     refresh_seconds: int = 300
+    sns_redis_url: str = "redis://localhost:6379/0"
+    storage_url: str = "http://localhost:9000"
+    storage_bucket: str = "media"
+    storage_access_key: str = "rustfsadmin"
+    storage_secret_key: SecretStr = SecretStr("rustfsadmin")
 
 
 @lru_cache
