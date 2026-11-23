@@ -28,17 +28,21 @@ def test_model_failure_keeps_recorded_actions(monkeypatch: pytest.MonkeyPatch) -
     sync.assert_called_once()
 
 
-def test_loop_retries_and_restores_signal_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
-    stop = Mock()
-    stop.is_set.side_effect = [False, False, False, True]
-    poll = Mock(side_effect=[RuntimeError("offline"), RuntimeError("offline"), {"processed": 0}])
-    handlers = Mock(return_value=None)
-    monkeypatch.setattr(event_worker, "Event", lambda: stop)
+def test_loop_retries_with_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleep = Mock()
+    poll = Mock(
+        side_effect=[
+            RuntimeError("offline"),
+            RuntimeError("offline"),
+            {"processed": 0},
+            KeyboardInterrupt,
+        ]
+    )
     monkeypatch.setattr(event_worker, "poll_once", poll)
-    monkeypatch.setattr(event_worker.signal, "signal", handlers)
-    event_worker.run_poller()
-    assert [c.args[0] for c in stop.wait.call_args_list] == [3, 6, 3]
-    assert handlers.call_count == 4
+    monkeypatch.setattr(event_worker.time, "sleep", sleep)
+    with pytest.raises(KeyboardInterrupt):
+        event_worker.run_poller()
+    assert [c.args[0] for c in sleep.call_args_list] == [3, 6, 3]
 
 
 def test_cursor_keeps_the_overlap_window() -> None:

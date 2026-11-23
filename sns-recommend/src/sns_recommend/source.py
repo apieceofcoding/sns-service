@@ -3,21 +3,15 @@ from .db import source_connection
 VISIBLE = "deleted_at IS NULL AND parent_id IS NULL AND repost_id IS NULL"
 
 
-def changed_posts(position, limit):
+def post_hashes():
     with source_connection() as conn:
-        return conn.execute(
-            f"""SELECT id,content_version AS version,({VISIBLE}) AS visible,
-            modified_at AT TIME ZONE 'UTC' AS changed_at,id AS source_id
-            FROM posts WHERE (modified_at,id)>(%s::timestamp,%s::bigint)
-            ORDER BY modified_at,id LIMIT %s""",
-            (*position, limit),
+        rows = conn.execute(
+            f"SELECT id,md5(content) AS hash FROM posts WHERE {VISIBLE} ORDER BY id"
         ).fetchall()
+    return {r["id"]: r["hash"] for r in rows}
 
 
-def posts_to_index(post_ids):
+def post_bodies(post_ids):
     with source_connection() as conn:
-        return conn.execute(
-            f"""SELECT id,content AS body,content_version AS version,
-            ({VISIBLE}) AS visible FROM posts WHERE id=ANY(%s) ORDER BY id""",
-            (post_ids,),
-        ).fetchall()
+        rows = conn.execute("SELECT id,content FROM posts WHERE id=ANY(%s)", (post_ids,)).fetchall()
+    return {r["id"]: r["content"] for r in rows}
