@@ -70,11 +70,11 @@ cd sns-service/sns-recommend
 
 | 단계 | 하는 일 | 브랜치 |
 |---|---|---|
-| 후보 수집 (retrieve) | 볼 만한 글을 빠르게 모음 | part-2 |
+| 후보 수집 (retrieve) | 모델이 볼 글 30개를 빠르게 모음 | part-4 |
 | 순위 매기기 (rerank) | 우리 데이터로 학습한 트랜스포머가 반응 확률을 예측 | part-3, part-4 |
 | 거르기와 섞기 (validate, diversify) | 모델 출력 검사, 같은 작성자 연속 줄이기 | part-4 |
 | 결과 저장 (publish) | Redis에 목록 발행, 조회는 모델 없이 읽음 | part-4 |
-| 평가 (evaluation) | 후보 재현율, 학습 뒤 기간의 사용자 이벤트, A/B 실험으로 확인하고 이긴 모델만 교체 | part-2, part-3, part-5, part-6 |
+| 평가 (evaluation) | 후보 재현율, 학습 뒤 기간의 사용자 이벤트, A/B 실험으로 확인하고 이긴 모델만 교체 | part-3, part-4, part-5, part-6 |
 
 ### part-1. 기존 SNS와 실습 환경
 
@@ -113,7 +113,7 @@ npm run dev
 
 [SNS 화면](http://localhost:3000)에서 `recommenddemo` / `recommend1234`로 가입하고 로그인해요. 이미 가입했다면 로그인만 합니다. 글 작성도 확인하세요.
 
-### part-2. 행동 수집과 후보 수집
+### part-2. 행동 수집과 글 벡터
 
 아래 [모델 설정](#모델-설정)의 Ollama를 먼저 준비합니다.
 
@@ -157,21 +157,6 @@ curl -fsS -b cookies.txt -X POST http://localhost:8080/api/v1/recommend/actions 
 uv run sns-recommend-event-worker --once
 ```
 
-```sh
-# 후보 수집: 사용자 벡터로 의미 검색, 최신순과 인기순을 합쳐 최대 30개
-uv run sns-recommend profile --user 7
-uv run sns-recommend candidates --user 7
-```
-
-사용자 벡터는 최근 반응한 글 벡터 최대 5개의 평균이며 메모리에만 둡니다. 후보는 최근 48시간 글에서 본인 글, 삭제 글, 이미 본 글을 빼고 고릅니다. `sources`로 후보가 들어온 경로를 확인해요. 후보에서 빠진 글은 다음 단계가 되살릴 수 없습니다.
-
-```sh
-# 후보 수집 평가: 최근 1시간에 반응한 글이 그 전에 만든 후보 30개 안에 있었나
-uv run sns-recommend recall
-```
-
-`recall@30`은 최근 1시간 동안 클릭하거나 좋아요한 글 중, 그 시점 전의 정보로 만든 후보에 이미 들어 있던 비율입니다. 독자가 반응할 만한 글은 수백 개인데 후보는 30개라 값 자체는 작아요. `random`(무작위 30개의 기댓값)보다 몇 배 높은지를 봅니다. 최신순과 인기순을 섞으면 의미 검색만 쓸 때보다 재현율이 조금 낮아지지만, 새 글과 인기 글도 노출할 기회를 얻습니다.
-
 별도 터미널에서 `uv run sns-recommend-event-worker`를 켜 두면 이후 변경도 계속 반영해요.
 
 ### part-3. 순위 모델 학습
@@ -206,6 +191,23 @@ cd ../sns-recommend
 uv sync --locked
 uv run sns-recommend init
 ```
+
+순위 모델은 글마다 이력 전체와 함께 계산해서, 최근 글 전부에 돌리기에는 비쌉니다. 그래서 먼저 가벼운 벡터 비교로 후보 30개를 고르고 모델은 그 30개에만 씁니다.
+
+```sh
+# 후보 수집: 사용자 벡터로 의미 검색, 최신순과 인기순을 합쳐 최대 30개
+uv run sns-recommend profile --user 7
+uv run sns-recommend candidates --user 7
+```
+
+사용자 벡터는 최근 반응한 글 벡터 최대 5개의 평균이며 메모리에만 둡니다. 후보는 최근 48시간 글에서 본인 글, 삭제 글, 이미 본 글을 빼고 고릅니다. `sources`로 후보가 들어온 경로를 확인해요. 후보에서 빠진 글은 다음 단계가 되살릴 수 없습니다.
+
+```sh
+# 후보 수집 평가: 최근 1시간에 반응한 글이 그 전에 만든 후보 30개 안에 있었나
+uv run sns-recommend recall
+```
+
+`recall@30`은 최근 1시간 동안 클릭하거나 좋아요한 글 중, 그 시점 전의 정보로 만든 후보에 이미 들어 있던 비율입니다. 독자가 반응할 만한 글은 수백 개인데 후보는 30개라 값 자체는 작아요. `random`(무작위 30개의 기댓값)보다 몇 배 높은지를 봅니다. 최신순과 인기순을 섞으면 의미 검색만 쓸 때보다 재현율이 조금 낮아지지만, 새 글과 인기 글도 노출할 기회를 얻습니다.
 
 ```sh
 # 새 터미널: 추천 조회 API 실행 후 켜 두기
