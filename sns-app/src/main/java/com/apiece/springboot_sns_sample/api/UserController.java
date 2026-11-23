@@ -5,6 +5,8 @@ import com.apiece.springboot_sns_sample.api.reply.ReplyResponse;
 import com.apiece.springboot_sns_sample.api.user.UserResponse;
 import com.apiece.springboot_sns_sample.api.user.UserSignupRequest;
 import com.apiece.springboot_sns_sample.config.auth.AuthUser;
+import com.apiece.springboot_sns_sample.domain.follow.Follow;
+import com.apiece.springboot_sns_sample.domain.follow.FollowService;
 import com.apiece.springboot_sns_sample.domain.post.PostService;
 import com.apiece.springboot_sns_sample.domain.post.PostWithViewCount;
 import com.apiece.springboot_sns_sample.domain.user.User;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.reverseOrder;
@@ -24,6 +27,7 @@ public class UserController {
 
     private final UserService userService;
     private final PostService postService;
+    private final FollowService followService;
 
     @PostMapping("/api/v1/users/signup")
     public UserResponse signupUser(@RequestBody UserSignupRequest request) {
@@ -59,6 +63,22 @@ public class UserController {
     public List<ReplyResponse> getUserReplies(@PathVariable Long userId) {
         return postService.getRepliesByUserId(userId).stream()
                 .map(ReplyResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/api/v1/users/{userId}/followers")
+    public List<UserResponse> getFollowers(@PathVariable Long userId) {
+        return toUsers(followService.getFollowers(userService.getById(userId)).stream().map(Follow::getFollowerId));
+    }
+
+    @GetMapping("/api/v1/users/{userId}/following")
+    public List<UserResponse> getFollowing(@PathVariable Long userId) {
+        return toUsers(followService.getFollowees(userService.getById(userId)).stream().map(Follow::getFolloweeId));
+    }
+
+    private List<UserResponse> toUsers(Stream<Long> userIds) {
+        return userIds.map(userService::getById)
+                .map(user -> UserResponse.from(user, userService.getProfileImageUrl(user)))
                 .toList();
     }
 }
