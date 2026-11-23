@@ -36,7 +36,7 @@ public class S3Config {
     @Bean
     public S3Presigner s3Presigner() {
         return S3Presigner.builder()
-                .endpointOverride(URI.create(rustFsProperties.endpoint()))
+                .endpointOverride(URI.create(rustFsProperties.publicEndpoint()))
                 .region(Region.of(rustFsProperties.region()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(
