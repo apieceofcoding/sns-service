@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { cn } from "@/lib/utils"
+import { PageHeader } from "@/components/app-shell"
+import { UserAvatar } from "@/components/user-avatar"
 import { useAuth } from "@/hooks/api/use-auth"
 import { useUser, useUserFollowCounts, useUserPosts } from "@/hooks/api/use-users"
 import { useIsFollowing, useFollow, useUnfollow } from "@/hooks/api/use-follows"
@@ -45,134 +45,84 @@ export function UserProfileHeader({ userId, activeTab, onTabChange }: UserProfil
     }
   }
 
-  if (isUserLoading) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        로딩 중...
-      </div>
-    )
-  }
+  if (isUserLoading) return <p className="p-8 text-center text-muted-foreground">불러오는 중...</p>
+  if (!user) return <p className="p-8 text-center text-muted-foreground">사용자를 찾을 수 없습니다.</p>
 
-  if (!user) {
-    return (
-      <div className="p-8 text-center text-muted-foreground">
-        사용자를 찾을 수 없습니다.
-      </div>
-    )
-  }
+  const tabs: [UserProfileTab, string][] = [
+    ["posts", "게시물"],
+    ["replies", "답글"],
+    ["media", "미디어"],
+    ...(isMe ? [["likes", "마음에 들어요"] as [UserProfileTab, string]] : []),
+  ]
+  const pill = "h-9 rounded-full px-4 font-bold transition-colors disabled:opacity-50"
 
   return (
     <>
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="flex items-center gap-4 p-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            onClick={() => router.back()}
+      <PageHeader title={user.username} subtitle={`게시물 ${postCount}개`} onBack={() => router.back()} />
+
+      <div className="aspect-[3/1] bg-[#333639]" />
+      <div className="px-4 pt-3">
+        <div className="flex items-start justify-between">
+          <UserAvatar
+            username={user.username}
+            imageUrl={user.profileImageUrl}
+            className="-mt-[15%] size-[134px] border-4 border-background text-5xl"
+          />
+          {isMe && (
+            <button type="button" onClick={() => setIsEditDialogOpen(true)} className={`${pill} border border-[#536471] hover:bg-foreground/10`}>
+              프로필 수정
+            </button>
+          )}
+          {isAuthenticated && !isMe && (
+            <button
+              type="button"
+              onClick={handleFollowClick}
+              disabled={isMutating || isLoading}
+              className={
+                isFollowing
+                  ? `${pill} border border-[#536471] hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive`
+                  : `${pill} bg-secondary text-secondary-foreground hover:bg-secondary/90`
+              }
+            >
+              {isFollowing ? "팔로잉" : "팔로우"}
+            </button>
+          )}
+        </div>
+
+        <div className="mb-3 mt-3 leading-6">
+          <h2 className="text-xl font-extrabold">{user.username}</h2>
+          <p className="text-muted-foreground">@{user.username}</p>
+        </div>
+
+        <div className="mb-3 flex gap-5 text-sm">
+          <span>
+            <b>{followingCount.toLocaleString()}</b> <span className="text-muted-foreground">팔로우 중</span>
+          </span>
+          <span>
+            <b>{followerCount.toLocaleString()}</b> <span className="text-muted-foreground">팔로워</span>
+          </span>
+        </div>
+      </div>
+
+      <div role="tablist" className="flex border-b border-border">
+        {tabs.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === value}
+            onClick={() => onTabChange(value)}
+            className="flex h-[53px] flex-1 justify-center px-4 transition-colors hover:bg-foreground/10"
           >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold">{user.username}</h1>
-            <div className="text-sm text-muted-foreground">{postCount}개 게시물</div>
-          </div>
-        </div>
+            <span className={cn("relative flex items-center", activeTab === value ? "font-bold" : "font-medium text-muted-foreground")}>
+              {label}
+              {activeTab === value && <span className="absolute inset-x-0 bottom-0 h-1 rounded-full bg-primary" />}
+            </span>
+          </button>
+        ))}
       </div>
 
-      <div>
-        <div className="h-48 bg-gradient-to-r from-primary/20 to-primary/40" />
-        <div className="px-4">
-          <div className="flex justify-between items-start -mt-16 mb-4">
-            <div className="w-32 h-32 rounded-full border-4 border-background bg-muted overflow-hidden">
-              {user.profileImageUrl ? (
-                <img
-                  src={user.profileImageUrl}
-                  alt={user.username}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-4xl text-muted-foreground font-medium">
-                  {user.username?.charAt(0).toUpperCase() || '?'}
-                </div>
-              )}
-            </div>
-            {isAuthenticated && !isMe && (
-              <Button
-                variant={isFollowing ? "outline" : "default"}
-                className="mt-20 rounded-full font-bold cursor-pointer"
-                onClick={handleFollowClick}
-                disabled={isMutating || isLoading}
-              >
-                {isMutating ? "..." : isFollowing ? "팔로잉" : "팔로우"}
-              </Button>
-            )}
-            {isMe && (
-              <Button
-                variant="outline"
-                className="mt-20 rounded-full font-bold bg-transparent cursor-pointer"
-                onClick={() => setIsEditDialogOpen(true)}
-              >
-                프로필 수정
-              </Button>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <h2 className="text-2xl font-bold">{user.username}</h2>
-            <div className="text-muted-foreground">@{user.username}</div>
-          </div>
-
-          <div className="flex gap-6 mb-4 text-sm">
-            <div>
-              <span className="font-bold text-foreground">{followingCount.toLocaleString()}</span>
-              <span className="text-muted-foreground ml-1">팔로잉</span>
-            </div>
-            <div>
-              <span className="font-bold text-foreground">{followerCount.toLocaleString()}</span>
-              <span className="text-muted-foreground ml-1">팔로워</span>
-            </div>
-          </div>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as UserProfileTab)} className="w-full">
-          <TabsList className="w-full justify-start rounded-none border-b border-border bg-transparent h-auto p-0">
-            <TabsTrigger
-              value="posts"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent flex-1"
-            >
-              게시글
-            </TabsTrigger>
-            <TabsTrigger
-              value="replies"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent flex-1"
-            >
-              답글
-            </TabsTrigger>
-            <TabsTrigger
-              value="media"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent flex-1"
-            >
-              미디어
-            </TabsTrigger>
-            {isMe && (
-              <TabsTrigger
-                value="likes"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent flex-1"
-              >
-                마음에 들어요
-              </TabsTrigger>
-            )}
-          </TabsList>
-        </Tabs>
-      </div>
-
-      {isMe && (
-        <ProfileEditDialog
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-        />
-      )}
+      {isMe && <ProfileEditDialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} />}
     </>
   )
 }

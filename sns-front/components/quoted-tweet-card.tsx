@@ -1,7 +1,6 @@
 "use client"
 
-import { formatDistanceToNow } from "date-fns"
-import { ko } from "date-fns/locale"
+import { shortTime } from "@/lib/utils"
 import type { Post } from "@/lib/types"
 import { ProfileAvatar } from "./profile-avatar"
 import { MediaGallery } from "./media-gallery"
@@ -12,18 +11,13 @@ interface QuotedTweetCardProps {
 }
 
 export function QuotedTweetCard({ post, onClick }: QuotedTweetCardProps) {
-  const formattedDate = formatDistanceToNow(new Date(post.createdAt), {
-    addSuffix: false,
-    locale: ko,
-  })
-
   return (
     <div
       onClick={(e) => {
         e.stopPropagation()
         onClick?.()
       }}
-      className="mt-3 border border-border rounded-2xl overflow-hidden hover:bg-accent/20 transition-colors cursor-pointer"
+      className="mt-3 border border-border rounded-2xl overflow-hidden hover:bg-foreground/[0.03] transition-colors cursor-pointer"
     >
       <div className="p-3">
         <div className="flex items-center gap-2 mb-1">
@@ -34,7 +28,7 @@ export function QuotedTweetCard({ post, onClick }: QuotedTweetCardProps) {
           />
           <span className="font-bold text-sm truncate">{post.username}</span>
           <span className="text-muted-foreground text-sm">
-            @{post.username} · {formattedDate}
+            @{post.username} {shortTime(post.createdAt)}
           </span>
         </div>
         {post.content && (

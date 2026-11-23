@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Reply, ReplyCreateRequest, ReplyUpdateRequest } from '@/lib/types'
+import type { Reply, ReplyCreateRequest } from '@/lib/types'
 
 export const repliesApi = {
   create: (postId: number, data: ReplyCreateRequest) => {
@@ -8,13 +8,5 @@ export const repliesApi = {
 
   getByPost: (postId: number) => {
     return apiClient.get<Reply[]>(`/api/v1/posts/${postId}/replies`)
-  },
-
-  update: (replyId: number, data: ReplyUpdateRequest) => {
-    return apiClient.put<Reply>(`/api/v1/replies/${replyId}`, data)
-  },
-
-  delete: (replyId: number) => {
-    return apiClient.delete<void>(`/api/v1/replies/${replyId}`)
   },
 }

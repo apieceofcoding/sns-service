@@ -1,16 +1,9 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { likesApi } from '@/lib/api/likes'
 import type { Post } from '@/lib/types'
-
-export function useLikes() {
-  return useQuery({
-    queryKey: ['likes'],
-    queryFn: () => likesApi.getAll(),
-  })
-}
 
 export function useLikePost() {
   const queryClient = useQueryClient()
@@ -70,7 +63,7 @@ export function useLikePost() {
         old ? { ...old, likeIdByMe: data.id } : old
       )
     },
-    onError: (error, postId, context) => {
+    onError: (_error, postId, context) => {
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -81,7 +74,6 @@ export function useLikePost() {
         queryClient.setQueryData(['posts', postId], context.previousPost)
       }
       toast.error('좋아요 실패')
-      console.error('Like post error:', error)
     },
     onSettled: (data, error, postId) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] })
@@ -130,7 +122,7 @@ export function useUnlikePost() {
 
       return { previousPosts, previousTimeline, previousPost, postId }
     },
-    onError: (error, variables, context) => {
+    onError: (_error, variables, context) => {
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -141,7 +133,6 @@ export function useUnlikePost() {
         queryClient.setQueryData(['posts', context.postId], context.previousPost)
       }
       toast.error('좋아요 취소 실패')
-      console.error('Unlike post error:', error)
     },
     onSettled: (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] })
