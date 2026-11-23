@@ -91,7 +91,7 @@ npm run dev
 git switch part-1-environment
 # SNS 앱 실행 후
 uv sync
-# 사용자와 글 1,200개 생성
+# 사용자, 글, 팔로우, 이미지 생성. 다시 실행하면 SNS 데이터를 모두 지우고 새로 만듦
 uv run sns-recommend seed
 ```
 

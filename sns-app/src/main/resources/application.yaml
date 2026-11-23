@@ -65,6 +65,7 @@ logging:
         service_name: "${spring.application.name}"
 rustfs:
   endpoint: http://localhost:9000
+  public-endpoint: http://localhost:9000
   access-key: rustfsadmin
   secret-key: rustfsadmin
   bucket: media
