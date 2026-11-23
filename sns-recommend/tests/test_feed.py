@@ -14,6 +14,12 @@ def test_cursor_cannot_move_to_another_user():
         cursor_decode("not-a-cursor", 1)
 
 
+@pytest.mark.parametrize("snapshot,offset", [("a:b", 0), (["abc"], 0), ("abc", -1), ("abc", True)])
+def test_cursor_rejects_values_the_server_never_issues(snapshot, offset):
+    with pytest.raises(ValueError):
+        cursor_decode(cursor_encode(1, snapshot, offset), 1)
+
+
 def test_feed_rejects_limit_out_of_range():
     client = TestClient(app)
     assert client.get("/internal/feeds/1?limit=0").status_code == 422

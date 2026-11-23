@@ -22,5 +22,3 @@ def feed(
         return read_feed(user_id, limit, cursor, excluded_ids(user_id), alive=source.alive_ids)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except LookupError as exc:
-        raise HTTPException(410, str(exc)) from exc

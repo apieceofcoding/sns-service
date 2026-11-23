@@ -26,7 +26,7 @@ public class RecommendController {
             @RequestParam(required = false) String cursor,
             @RequestParam(defaultValue = "20") int limit) {
         if (user == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
-        var page = recommend.get(user.getId(), limit, cursor);
+        var page = recommend.get(user.getId(), Math.clamp(limit, 1, 50), cursor);
         var result = posts.enrichWithUserContext(page.posts(), user).stream().map(PostResponse::from).toList();
         return ResponseEntity.ok(new RecommendResponse(result, page.nextCursor(),
                 page.nextCursor() != null, page.mode()));

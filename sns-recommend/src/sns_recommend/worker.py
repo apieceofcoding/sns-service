@@ -7,7 +7,7 @@ import time
 
 from .config import settings
 from .db import connection
-from .feed import current_created_at
+from .feed import WANTED, current_created_at, redis_client
 from .generation import generate
 
 logger = logging.getLogger(__name__)
@@ -20,12 +20,12 @@ def due_users() -> list[int]:
             """SELECT DISTINCT user_id FROM user_events
             WHERE occurred_at>now()-interval '30 minutes' ORDER BY user_id"""
         ).fetchall()
-    due = []
+    due = {int(u) for u in redis_client().spop(WANTED, 1000) or []}
     for row in rows:
         created_at = current_created_at(row["user_id"])
         if created_at is None or time.time() - created_at >= settings().refresh_seconds:
-            due.append(row["user_id"])
-    return due
+            due.add(row["user_id"])
+    return sorted(due)
 
 
 def run_once() -> int:

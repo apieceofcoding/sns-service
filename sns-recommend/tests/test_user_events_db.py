@@ -7,6 +7,7 @@ import pytest
 from sns_recommend import (
     event_worker,
     events,
+    feed,
     generation,
     indexing,
     profiles,
@@ -44,6 +45,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
         conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,simulation")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
+    feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
     monkeypatch.setattr(seed, "POSTS", POSTS)
     seed.seed()
 
@@ -119,6 +121,16 @@ def test_worker_rebuilds_lists_only_for_active_users_without_a_fresh_list() -> N
     assert worker.due_users() == [READER]
     assert worker.run_once() == 1
     assert worker.due_users() == []
+
+
+def test_reading_without_a_list_asks_the_worker_and_expired_cursor_restarts() -> None:
+    assert feed.read_feed(READER)["ready"] is False
+    assert worker.due_users() == [READER]
+    generation.generate(READER)
+    first = feed.read_feed(READER, limit=5)
+    feed.redis_client().delete(f"recommend:feed:{READER}:{first['snapshot_id']}")
+    again = feed.read_feed(READER, limit=5, cursor=first["next_cursor"])
+    assert again["post_ids"] == first["post_ids"]
 
 
 def pending_index() -> list[int]:
