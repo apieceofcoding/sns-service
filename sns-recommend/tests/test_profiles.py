@@ -53,7 +53,7 @@ def test_user_vector_is_computed_without_state_writes(
     queries = [call.args[0] for call in conn.execute.call_args_list]
     assert all(query.lstrip().startswith("SELECT") for query in queries)
     assert "GROUP BY post_id" in queries[0] and "LIMIT 20" in queries[0]
-    assert "removed_at IS NULL" in queries[0]
+    assert "deleted_at IS NULL" in queries[0]
 
 
 def test_unknown_user_cannot_build_vector(monkeypatch: pytest.MonkeyPatch) -> None:

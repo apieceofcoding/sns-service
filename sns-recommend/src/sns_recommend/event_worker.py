@@ -17,7 +17,7 @@ ACTION_SOURCES = (
     (
         "likes",
         """SELECT 'like' AS action,user_id,post_id,
-        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS removed_at,
+        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS deleted_at,
         modified_at AT TIME ZONE 'UTC' AS changed_at,id AS source_id
         FROM likes WHERE (modified_at,id)>(%s::timestamp,%s::bigint)
         ORDER BY modified_at,id LIMIT %s""",
@@ -26,7 +26,7 @@ ACTION_SOURCES = (
         "posts",
         """SELECT CASE WHEN parent_id IS NOT NULL THEN 'reply' ELSE 'repost' END AS action,
         user_id,COALESCE(parent_id,repost_id) AS post_id,
-        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS removed_at,
+        created_at AT TIME ZONE 'UTC' AS occurred_at,deleted_at AT TIME ZONE 'UTC' AS deleted_at,
         modified_at AT TIME ZONE 'UTC' AS changed_at,id AS source_id
         FROM posts WHERE (parent_id IS NOT NULL OR repost_id IS NOT NULL)
         AND (modified_at,id)>(%s::timestamp,%s::bigint)
@@ -35,7 +35,7 @@ ACTION_SOURCES = (
     (
         "post_actions",
         """SELECT action,user_id,post_id,
-        created_at AS occurred_at,NULL::timestamptz AS removed_at,
+        created_at AS occurred_at,NULL::timestamptz AS deleted_at,
         recorded_at AS changed_at,id AS source_id
         FROM post_actions WHERE (recorded_at,id)>(%s::timestamptz,%s::bigint)
         ORDER BY recorded_at,id LIMIT %s""",
@@ -53,22 +53,22 @@ def sync_source(name, query):
             rows = source.execute(query, (*reading, BATCH_SIZE)).fetchall()
         with connection() as conn:
             known = {
-                (row["action"], row["source_id"]): row["removed_at"]
+                (row["action"], row["source_id"]): row["deleted_at"]
                 for row in conn.execute(
-                    "SELECT action,source_id,removed_at FROM user_events WHERE source_id=ANY(%s)",
+                    "SELECT action,source_id,deleted_at FROM user_events WHERE source_id=ANY(%s)",
                     ([row["source_id"] for row in rows],),
                 ).fetchall()
             }
             changed = [
                 row
                 for row in rows
-                if known.get((row["action"], row["source_id"]), "new") != row["removed_at"]
+                if known.get((row["action"], row["source_id"]), "new") != row["deleted_at"]
             ]
             conn.cursor().executemany(
-                """INSERT INTO user_events(source_id,action,user_id,post_id,occurred_at,removed_at)
+                """INSERT INTO user_events(source_id,action,user_id,post_id,occurred_at,deleted_at)
                 VALUES (%(source_id)s,%(action)s,%(user_id)s,%(post_id)s,
-                %(occurred_at)s,%(removed_at)s)
-                ON CONFLICT(source_id,action) DO UPDATE SET removed_at=EXCLUDED.removed_at""",
+                %(occurred_at)s,%(deleted_at)s)
+                ON CONFLICT(source_id,action) DO UPDATE SET deleted_at=EXCLUDED.deleted_at""",
                 changed,
             )
             position = next_position(rows, position, settled)

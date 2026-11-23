@@ -38,7 +38,7 @@ def candidate_recall(hours: float = 1, k: int = 30) -> dict:
     with connection() as conn:
         reacted = conn.execute(
             """SELECT user_id,array_agg(DISTINCT post_id) AS posts FROM user_events
-            WHERE action IN ('click','like') AND removed_at IS NULL AND occurred_at>=%s
+            WHERE action IN ('click','like') AND deleted_at IS NULL AND occurred_at>=%s
             GROUP BY user_id""",
             (as_of,),
         ).fetchall()
