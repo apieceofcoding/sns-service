@@ -78,7 +78,6 @@ docker compose up -d
 cd sns-front
 npm ci # 처음 한 번만
 npm run dev
-# 로그인: jihoon_codes / sample1234 (part-1 seed의 샘플 계정, 직접 가입은 seed 뒤에)
 ```
 
 ## part별 실행
@@ -94,6 +93,8 @@ uv sync
 # 사용자, 글, 팔로우, 이미지 생성. 다시 실행하면 SNS 데이터를 모두 지우고 새로 만듦
 uv run sns-recommend seed
 ```
+
+독자 계정(비밀번호 `sample1234`): `jihoon_codes`(백엔드, AI), `haeun_wander`(여행, 여행 영상), `taeyang_fit`(운동, 식단), `sujin_daily`(여행, 운동), `minho_weekend`(AI, 여행 영상)
 
 ### part-2. 행동 수집과 후보 수집
 
