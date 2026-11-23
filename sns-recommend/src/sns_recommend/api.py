@@ -37,5 +37,3 @@ def feed(
         return result
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except LookupError as exc:
-        raise HTTPException(410, str(exc)) from exc

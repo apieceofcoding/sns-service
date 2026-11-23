@@ -7,6 +7,7 @@ from redis import Redis
 
 from .config import settings
 
+WANTED = "recommend:wanted"
 PUBLISH = """
 local current = redis.call('GET', KEYS[2])
 if current and tonumber(cjson.decode(current).generation) > tonumber(ARGV[3]) then return 0 end
@@ -63,7 +64,9 @@ def cursor_encode(user_id, snapshot_id, offset):
 def cursor_decode(cursor, user_id):
     try:
         owner, snapshot, offset = json.loads(base64.urlsafe_b64decode(cursor))
-        if owner != user_id or not isinstance(offset, int) or offset < 0:
+        if owner != user_id or not (isinstance(snapshot, str) and snapshot.isalnum()):
+            raise ValueError()
+        if type(offset) is not int or offset < 0:
             raise ValueError()
         return snapshot, offset
     except Exception as exc:
@@ -72,14 +75,14 @@ def cursor_decode(cursor, user_id):
 
 def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
     r = redis_client()
+    raw = None
     if cursor:
         snapshot, offset = cursor_decode(cursor, user_id)
         raw = r.get(f"recommend:feed:{user_id}:{snapshot}")
-        if raw is None:
-            raise LookupError("snapshot expired; start a new feed session")
-    else:
+    if raw is None:
         raw, offset = r.get(f"recommend:current:{user_id}"), 0
     if raw is None:
+        r.sadd(WANTED, user_id)
         return {"ready": False, "post_ids": [], "next_cursor": None}
     data = json.loads(raw)
     excluded = excluded or set()

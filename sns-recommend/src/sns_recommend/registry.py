@@ -52,6 +52,11 @@ def reject(version: int) -> None:
         )
 
 
+def latest() -> dict | None:
+    with connection() as conn:
+        return conn.execute("SELECT * FROM model_versions ORDER BY id DESC LIMIT 1").fetchone()
+
+
 def promote(version: int) -> dict:
     with connection() as conn:
         row = conn.execute("SELECT status FROM model_versions WHERE id=%s", (version,)).fetchone()
@@ -70,9 +75,13 @@ def rollback() -> dict:
             """SELECT id FROM model_versions WHERE status='retired' AND activated_at IS NOT NULL
             ORDER BY activated_at DESC LIMIT 1"""
         ).fetchone()
-    if row is None:
-        raise LookupError("no earlier version to roll back to")
-    return promote(row["id"])
+        if row is None:
+            raise LookupError("no earlier version to roll back to")
+        conn.execute("UPDATE model_versions SET status='rejected' WHERE status='active'")
+        conn.execute(
+            "UPDATE model_versions SET status='active',activated_at=now() WHERE id=%s", (row["id"],)
+        )
+    return {"active": row["id"]}
 
 
 def versions(limit: int = 10) -> list[dict]:

@@ -13,6 +13,13 @@ def test_without_a_model_retrieval_order_is_kept(monkeypatch: pytest.MonkeyPatch
     assert result == {"ids": [1, 2, 3], "scores": None, "strategy": "embedding"}
 
 
+def test_without_post_features_the_model_is_not_claimed(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(ranking, "serving_model", lambda version: (object(), 3))
+    monkeypatch.setattr(ranking, "recent_history", lambda user: [])
+    monkeypatch.setattr(ranking, "post_features", lambda ids: {})
+    assert ranking.rank(7, candidates(1, 2))["strategy"] == "embedding"
+
+
 def test_broken_scores_fall_back(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ranking, "serving_model", lambda version: (object(), 3))
     monkeypatch.setattr(ranking, "recent_history", lambda user: [])

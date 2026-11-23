@@ -9,6 +9,7 @@ from sns_recommend import (
     event_worker,
     events,
     experiment,
+    feed,
     generation,
     indexing,
     profiles,
@@ -50,6 +51,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
         )
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
+    feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
     monkeypatch.setattr(seed, "POSTS", POSTS)
     seed.seed()
     monkeypatch.setattr(generation.settings(), "explore_rate", 0.0)
@@ -126,6 +128,16 @@ def test_worker_rebuilds_lists_only_for_active_users_without_a_fresh_list() -> N
     assert worker.due_users() == [READER]
     assert worker.run_once() == 1
     assert worker.due_users() == []
+
+
+def test_reading_without_a_list_asks_the_worker_and_expired_cursor_restarts() -> None:
+    assert feed.read_feed(READER)["ready"] is False
+    assert worker.due_users() == [READER]
+    generation.generate(READER)
+    first = feed.read_feed(READER, limit=5)
+    feed.redis_client().delete(f"recommend:feed:{READER}:{first['snapshot_id']}")
+    again = feed.read_feed(READER, limit=5, cursor=first["next_cursor"])
+    assert again["post_ids"] == first["post_ids"]
 
 
 def pending_index() -> list[int]:
@@ -264,6 +276,7 @@ def trained(tmp_path, monkeypatch, users: int = 40) -> dict:
 def test_first_model_serves_and_later_ones_wait_for_an_experiment(tmp_path, monkeypatch) -> None:
     first = trained(tmp_path, monkeypatch)
     assert first["promoted"] is True and registry.active()["id"] == first["version"]
+    assert trainer.retrain()["trained"] is False
     served = generation.generate(READER)
     assert served["strategy"] == "model" and served["model_version"] == first["version"]
     second = trainer.retrain(force=True, epochs=2)
@@ -273,6 +286,8 @@ def test_first_model_serves_and_later_ones_wait_for_an_experiment(tmp_path, monk
     assert registry.version_row(second["version"])["status"] == "rejected"
     registry.promote(third["version"])
     assert registry.rollback() == {"active": first["version"]}
+    with pytest.raises(LookupError):
+        registry.rollback()
 
 
 def test_experiment_serves_each_group_its_model_and_promotes_the_winner(
