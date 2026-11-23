@@ -24,21 +24,21 @@ class RecommendControllerTest {
 
     @Test
     void usesAuthenticatedUserInsteadOfQueryUserId() throws Exception {
-        var recommend = mock(RecommendFeedService.class);
-        var posts = mock(PostService.class);
+        var recommendFeedService = mock(RecommendFeedService.class);
+        var postService = mock(PostService.class);
         User user = User.create("reader", "");
         ReflectionTestUtils.setField(user, "id", 7L);
-        when(recommend.get(7, 20, null)).thenReturn(new Page(List.of(), "next", "recommend"));
-        when(posts.enrichWithUserContext(List.of(), user)).thenReturn(List.of());
+        when(recommendFeedService.get(7, 20, null)).thenReturn(new Page(List.of(), "next", "recommend"));
+        when(postService.enrichWithUserContext(List.of(), user)).thenReturn(List.of());
 
-        MockMvcBuilders.standaloneSetup(new RecommendController(recommend, posts))
+        MockMvcBuilders.standaloneSetup(new RecommendController(recommendFeedService, postService))
                 .setCustomArgumentResolvers(resolver(user)).build()
                 .perform(get("/api/v1/recommend?userId=999"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mode").value("recommend"))
                 .andExpect(jsonPath("$.nextCursor").value("next"))
                 .andExpect(jsonPath("$.hasMore").value(true));
-        verify(recommend).get(7, 20, null);
+        verify(recommendFeedService).get(7, 20, null);
     }
 
     private HandlerMethodArgumentResolver resolver(User user) {

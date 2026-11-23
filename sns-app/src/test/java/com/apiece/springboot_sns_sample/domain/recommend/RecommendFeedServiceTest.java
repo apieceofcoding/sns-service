@@ -13,16 +13,16 @@ import static org.mockito.Mockito.*;
 
 class RecommendFeedServiceTest {
 
-    private final RecommendFeedClient client = mock(RecommendFeedClient.class);
-    private final PostRepository posts = mock(PostRepository.class);
-    private final RecommendFeedService service = new RecommendFeedService(client, posts);
+    private final RecommendFeedClient recommendFeedClient = mock(RecommendFeedClient.class);
+    private final PostRepository postRepository = mock(PostRepository.class);
+    private final RecommendFeedService recommendFeedService = new RecommendFeedService(recommendFeedClient, postRepository);
 
     @Test
     void restoresRankAndKeepsCursorWhenPostsDisappear() {
-        when(client.get(7, 3, null)).thenReturn(new RecommendFeedClient.Feed(true, List.of(3L, 1L, 2L), "next"));
+        when(recommendFeedClient.get(7, 3, null)).thenReturn(new RecommendFeedClient.Feed(true, List.of(3L, 1L, 2L), "next"));
         Post one = post(1), three = post(3);
-        when(posts.findAllByIdInAndDeletedAtIsNull(List.of(3L, 1L, 2L))).thenReturn(List.of(one, three));
-        var result = service.get(7, 3, null);
+        when(postRepository.findAllByIdInAndDeletedAtIsNull(List.of(3L, 1L, 2L))).thenReturn(List.of(one, three));
+        var result = recommendFeedService.get(7, 3, null);
         assertThat(result.posts()).containsExactly(three, one);
         assertThat(result.nextCursor()).isEqualTo("next");
         assertThat(result.mode()).isEqualTo("recommend");
@@ -30,12 +30,12 @@ class RecommendFeedServiceTest {
 
     @Test
     void missingFeedReturnsPendingWithoutReadingPosts() {
-        when(client.get(7, 20, null)).thenReturn(new RecommendFeedClient.Feed(false, List.of(), null));
-        var result = service.get(7, 20, null);
+        when(recommendFeedClient.get(7, 20, null)).thenReturn(new RecommendFeedClient.Feed(false, List.of(), null));
+        var result = recommendFeedService.get(7, 20, null);
         assertThat(result.mode()).isEqualTo("pending");
         assertThat(result.posts()).isEmpty();
         assertThat(result.nextCursor()).isNull();
-        verifyNoInteractions(posts);
+        verifyNoInteractions(postRepository);
     }
 
     private Post post(long id) {

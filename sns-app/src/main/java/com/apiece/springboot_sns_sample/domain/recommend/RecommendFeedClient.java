@@ -16,20 +16,20 @@ import java.util.Optional;
 @Component
 public class RecommendFeedClient {
 
-    private final RestClient client;
+    private final RestClient restClient;
 
     public RecommendFeedClient(RestClient.Builder builder,
                                 ClientHttpRequestFactoryBuilder<?> factory,
                                 HttpClientSettings settings,
                                 @Value("${recommend.feed-base-url}") String baseUrl) {
-        client = builder.baseUrl(baseUrl)
+        restClient = builder.baseUrl(baseUrl)
                 .requestFactory(factory.build(settings.withTimeouts(
                         Duration.ofMillis(500), Duration.ofSeconds(2))))
                 .build();
     }
 
     public Feed get(long userId, int limit, String cursor) {
-        Feed feed = client.get()
+        Feed feed = restClient.get()
                 .uri(uri -> uri.path("/internal/feeds/{userId}")
                         .queryParam("limit", limit)
                         .queryParamIfPresent("cursor", Optional.ofNullable(cursor))
