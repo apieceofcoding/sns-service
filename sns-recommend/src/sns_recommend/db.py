@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from .config import settings
@@ -24,3 +25,9 @@ def initialize():
             ddl = ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
             ddl = ddl.replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ")
             conn.execute(ddl)
+
+
+def clear_tables(conn):
+    tables = conn.execute("SELECT tablename FROM pg_tables WHERE schemaname='public'").fetchall()
+    names = sql.SQL(",").join(sql.Identifier(t["tablename"]) for t in tables)
+    conn.execute(sql.SQL("TRUNCATE {} RESTART IDENTITY").format(names))
