@@ -1,334 +1,132 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Heart, MessageCircle, Share, MoreHorizontal, Repeat2, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { MoreHorizontal, Repeat2, Trash2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { formatDistanceToNow } from "date-fns"
-import { ko } from "date-fns/locale"
-import { cn } from "@/lib/utils"
 import type { Post } from "@/lib/types"
-import { useLikePost, useUnlikePost } from "@/hooks/api/use-likes"
-import { useDeletePost, useIncrementView } from "@/hooks/api/use-posts"
+import { cn, shortTime } from "@/lib/utils"
+import { useIncrementView } from "@/hooks/api/use-posts"
 import { useAuth } from "@/hooks/api/use-auth"
 import { postsApi } from "@/lib/api/posts"
-import { RepostMenu } from "./repost-menu"
-import { QuoteDialog } from "./quote-dialog"
-import { ReplyDialog } from "./reply-dialog"
 import { QuotedTweetCard } from "./quoted-tweet-card"
 import { MediaGallery } from "./media-gallery"
 import { ProfileAvatar } from "./profile-avatar"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
+import { PostActions } from "./post-actions"
+import { DeletePostDialog } from "./delete-post-dialog"
 
 interface TweetCardProps {
   post: Post
-  showThread?: boolean
-  isThreadChild?: boolean
+  /** Draws a line from the avatar down to the next post, for a parent above its reply. */
+  threadLine?: boolean
 }
 
-export function TweetCard({ post, showThread = false, isThreadChild = false }: TweetCardProps) {
+export function TweetCard({ post, threadLine = false }: TweetCardProps) {
   const router = useRouter()
   const { user } = useAuth()
-  const likePost = useLikePost()
-  const unlikePost = useUnlikePost()
-  const deletePost = useDeletePost()
   const incrementView = useIncrementView()
-  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false)
-  const [replyDialogOpen, setReplyDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const articleRef = useRef<HTMLElement>(null)
 
+  const shown = post.repostedPost ?? post
+  const repostedByMe = !!post.repostedPost && post.repostedBy?.userId === user?.id
+
+  // An impression is recorded once the reader is known and half of the post is on screen.
   useEffect(() => {
     const article = articleRef.current
-    if (!article) return
-
+    if (!article || !user) return
     const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const targetId = post.repostedPost?.id || post.id
-            incrementView.mutate(targetId)
-            if (user) postsApi.recordAction("impression", targetId)
-            observer.unobserve(article)
-          }
-        })
+      ([entry]) => {
+        if (!entry.isIntersecting) return
+        incrementView.mutate(shown.id)
+        postsApi.recordAction("impression", shown.id)
+        observer.disconnect()
       },
-      { threshold: 0.5 } // 50% 이상 보일 때 조회로 간주
+      { threshold: 0.5 },
     )
-
     observer.observe(article)
+    return () => observer.disconnect()
+  }, [shown.id, user])
 
-    return () => {
-      observer.disconnect()
-    }
-  }, [post.id, post.repostedPost?.id])
-
-  const formattedDate = formatDistanceToNow(new Date(post.createdAt), {
-    addSuffix: true,
-    locale: ko,
-  })
-
-  const handleLike = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    const targetPost = post.repostedPost || post
-    if (targetPost.isLikedByMe) {
-      unlikePost.mutate({ postId: targetPost.id, likeId: targetPost.likeIdByMe! })
-    } else {
-      likePost.mutate(targetPost.id)
-    }
+  const open = () => {
+    if (user) postsApi.recordAction("click", shown.id)
+    router.push(`/post/${shown.id}`)
   }
 
-  const handleReplyClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setReplyDialogOpen(true)
-  }
-
-  const handleCardClick = () => {
-    const targetPost = post.repostedPost || post
-    if (user) postsApi.recordAction("click", targetPost.id)
-    router.push(`/post/${targetPost.id}`)
-  }
-
-  const isRepost = !!post.repostedPost
-
-  const isQuote = !!post.quotedPost
-
-  const isReply = post.parentId !== null
-
-  const displayPost = isRepost ? post.repostedPost! : post
-  const repostedPostDate = isRepost
-    ? formatDistanceToNow(new Date(post.repostedPost!.createdAt), { addSuffix: true, locale: ko })
-    : formattedDate
+  const profile = `/users/${shown.userId}`
+  const stop = (e: React.MouseEvent) => e.stopPropagation()
 
   return (
-    <>
-      <article
-        ref={articleRef}
-        onClick={handleCardClick}
-        className={cn(
-          "flex flex-col hover:bg-accent/30 transition-colors cursor-pointer",
-          !isThreadChild && "border-b border-border"
-        )}
-      >
-        {isRepost && (
-          <div className="flex items-center gap-3 px-4 pt-3 text-muted-foreground text-sm">
-            <div className="w-12 flex justify-end">
-              <Repeat2 className="w-4 h-4" />
-            </div>
-            <span className="font-semibold hover:underline">
-              {post.repostedBy?.username || post.username}님이 재게시했습니다
-            </span>
-          </div>
-        )}
+    <article
+      ref={articleRef}
+      onClick={open}
+      className={cn("cursor-pointer px-4 pt-3 transition-colors hover:bg-foreground/[0.03]", !threadLine && "border-b border-border")}
+    >
+      {post.repostedPost && (
+        <div className="mb-1 flex items-center gap-3 text-[13px] font-bold text-muted-foreground">
+          <Repeat2 className="ml-6 size-4" />
+          {post.repostedBy?.username ?? post.username}님이 재게시함
+        </div>
+      )}
 
-        {isReply && post.parentPost && !showThread && (
-          <div className="flex items-center gap-3 px-4 pt-3 text-muted-foreground text-sm">
-            <div className="w-12 flex justify-end">
-              <MessageCircle className="w-4 h-4" />
-            </div>
-            <span>
-              <span className="text-primary hover:underline">@{post.parentPost.username}</span>
-              님에게 보내는 답글
-            </span>
-          </div>
-        )}
+      <div className="flex gap-3">
+        <div className="flex flex-col items-center">
+          <Link href={profile} onClick={stop}>
+            <ProfileAvatar mediaId={shown.userProfileMediaId} username={shown.username} />
+          </Link>
+          {threadLine && <div className="mt-1 w-0.5 flex-1 bg-border" />}
+        </div>
 
-        <div className="flex gap-3 p-4">
-          {showThread && (
-            <div className="flex flex-col items-center">
-              <Link
-                href={`/users/${displayPost.userId}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ProfileAvatar
-                  mediaId={displayPost.userProfileMediaId}
-                  username={displayPost.username}
-                  size="md"
-                />
-              </Link>
-              {isThreadChild && (
-                <div className="w-0.5 flex-1 bg-border mt-2" />
-              )}
-            </div>
-          )}
-
-          {!showThread && (
-            <Link
-              href={`/users/${displayPost.userId}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ProfileAvatar
-                mediaId={displayPost.userProfileMediaId}
-                username={displayPost.username}
-                size="md"
-              />
+        <div className="min-w-0 flex-1 pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <Link href={profile} onClick={stop} className="flex min-w-0 gap-1 leading-5">
+              <span className="truncate font-bold hover:underline">{shown.username}</span>
+              <span className="truncate text-muted-foreground">@{shown.username}</span>
+              <span className="shrink-0 text-muted-foreground">{shortTime(shown.createdAt)}</span>
             </Link>
-          )}
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1 min-w-0 flex-wrap">
-                <Link
-                  href={`/users/${displayPost.userId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="font-bold truncate hover:underline"
-                >
-                  {displayPost.username}
-                </Link>
-                <Link
-                  href={`/users/${displayPost.userId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground truncate hover:underline"
-                >
-                  @{displayPost.username}
-                </Link>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-muted-foreground truncate">
-                  {repostedPostDate}
-                </span>
-              </div>
+            {post.userId === user?.id && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="flex-shrink-0 -mr-2 rounded-full hover:bg-primary/10 hover:text-primary"
-                    onClick={(e) => e.stopPropagation()}
+                  <button
+                    type="button"
+                    aria-label="더 보기"
+                    onClick={stop}
+                    className="-m-2 flex size-[34px] items-center justify-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-primary"
                   >
-                    <MoreHorizontal className="w-5 h-5" />
-                  </Button>
+                    <MoreHorizontal className="size-[18px]" />
+                  </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-48"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <DropdownMenuItem
-                    onClick={() => setDeleteDialogOpen(true)}
-                    className="text-destructive focus:text-destructive cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    삭제
+                <DropdownMenuContent align="end" className="rounded-2xl shadow-[0_0_15px_rgba(255,255,255,0.2)]" onClick={stop}>
+                  <DropdownMenuItem onClick={() => setDeleteOpen(true)} className="cursor-pointer px-4 py-3 font-bold text-destructive focus:text-destructive">
+                    <Trash2 className="size-4" />
+                    삭제하기
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-
-            {displayPost.content && (
-              <p className="mb-3 leading-relaxed whitespace-pre-wrap break-words">
-                {displayPost.content}
-              </p>
             )}
-
-            {displayPost.mediaIds && displayPost.mediaIds.length > 0 && (
-              <MediaGallery mediaIds={displayPost.mediaIds} className="mb-3" />
-            )}
-
-            {isQuote && post.quotedPost && (
-              <QuotedTweetCard
-                post={post.quotedPost}
-                onClick={() => router.push(`/post/${post.quotedPost!.id}`)}
-              />
-            )}
-
-            <div className="flex items-center justify-between max-w-md mt-3 -ml-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10 gap-2 rounded-full"
-                onClick={handleReplyClick}
-              >
-                <MessageCircle className="w-[18px] h-[18px]" />
-                <span className="text-sm tabular-nums">{displayPost.replyCount || ""}</span>
-              </Button>
-
-              <div onClick={(e) => e.stopPropagation()}>
-                <RepostMenu
-                  post={displayPost}
-                  onQuoteClick={() => setQuoteDialogOpen(true)}
-                  disableRepost={isRepost && post.repostedBy?.userId === user?.id}
-                  isReposted={isRepost && post.repostedBy?.userId === user?.id}
-                />
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                  "text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 gap-2 rounded-full group",
-                  displayPost.isLikedByMe && "text-rose-500"
-                )}
-                onClick={handleLike}
-                disabled={likePost.isPending || unlikePost.isPending}
-              >
-                <Heart
-                  className={cn(
-                    "w-[18px] h-[18px] transition-transform group-hover:scale-110",
-                    displayPost.isLikedByMe && "fill-current"
-                  )}
-                />
-                <span className="text-sm tabular-nums">{displayPost.likeCount || ""}</span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Share className="w-[18px] h-[18px]" />
-              </Button>
-            </div>
           </div>
+
+          {post.parentPost && !threadLine && (
+            <p className="text-muted-foreground">
+              <span className="text-primary">@{post.parentPost.username}</span> 님에게 보내는 답글
+            </p>
+          )}
+
+          {shown.content && <p className="whitespace-pre-wrap break-words leading-5">{shown.content}</p>}
+          {shown.mediaIds?.length > 0 && <MediaGallery mediaIds={shown.mediaIds} className="mt-3" />}
+          {post.quotedPost && <QuotedTweetCard post={post.quotedPost} onClick={() => router.push(`/post/${post.quotedPost!.id}`)} />}
+
+          <PostActions post={shown} repostedByMe={repostedByMe} />
         </div>
-      </article>
+      </div>
 
-      <QuoteDialog
-        post={displayPost}
-        open={quoteDialogOpen}
-        onOpenChange={setQuoteDialogOpen}
-      />
-      <ReplyDialog
-        post={displayPost}
-        open={replyDialogOpen}
-        onOpenChange={setReplyDialogOpen}
-      />
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>게시물을 삭제하시겠습니까?</AlertDialogTitle>
-            <AlertDialogDescription>
-              이 작업은 되돌릴 수 없습니다. 게시물이 영구적으로 삭제됩니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletePost.mutate(post.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              삭제
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+      <DeletePostDialog postId={post.id} open={deleteOpen} onOpenChange={setDeleteOpen} />
+    </article>
   )
 }

@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryKey: ['auth', 'me'],
     queryFn: () => usersApi.getMe(),
     retry: false,
-    staleTime: 5 * 60 * 1000, // 5분
+    staleTime: 5 * 60 * 1000,
   })
 
   const isValidUser = !!user && typeof user.id === 'number' && typeof user.username === 'string'

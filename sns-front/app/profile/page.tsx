@@ -1,28 +1,29 @@
 "use client"
 
-import { useState } from "react"
-import { Sidebar } from "@/components/sidebar"
-import { ProfileHeader } from "@/components/profile-header"
-import { ProfileFeed } from "@/components/profile-feed"
-import { TrendingPanel } from "@/components/trending-panel"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { Loader2 } from "lucide-react"
+import { AppShell } from "@/components/app-shell"
+import { useAuth } from "@/hooks/api/use-auth"
 
-export type ProfileTab = "posts" | "replies" | "media" | "likes"
-
+/** My profile is the user page for my ID. */
 export default function ProfilePage() {
-  const [activeTab, setActiveTab] = useState<ProfileTab>("posts")
+  const router = useRouter()
+  const { user, isLoading } = useAuth()
+
+  useEffect(() => {
+    if (user) router.replace(`/users/${user.id}`)
+  }, [user, router])
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <main className="flex-1 border-x border-border">
-        <div className="w-full max-w-2xl mx-auto">
-          <ProfileHeader activeTab={activeTab} onTabChange={setActiveTab} />
-          <ProfileFeed activeTab={activeTab} />
+    <AppShell>
+      {isLoading || user ? (
+        <div className="flex justify-center p-6">
+          <Loader2 className="size-6 animate-spin text-primary" />
         </div>
-      </main>
-      <aside className="hidden lg:block w-80 xl:w-96">
-        <TrendingPanel />
-      </aside>
-    </div>
+      ) : (
+        <p className="p-8 text-center text-muted-foreground">로그인 정보를 불러올 수 없습니다.</p>
+      )}
+    </AppShell>
   )
 }
