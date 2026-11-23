@@ -10,12 +10,11 @@ import org.springframework.stereotype.Repository;
 public class RecommendActionRepository {
     private final JdbcTemplate jdbcTemplate;
 
-    // Retried events, repeated impressions and deleted posts are skipped by the insert itself.
     public void record(UUID eventId, RecommendAction action, long userId, long postId) {
         jdbcTemplate.update("""
                 INSERT INTO post_actions(event_id, action, user_id, post_id)
                 SELECT ?, ?, ?, id FROM posts WHERE id = ? AND deleted_at IS NULL
                 ON CONFLICT DO NOTHING
-                """, eventId, action.value(), userId, postId);
+                """, eventId, action.getValue(), userId, postId);
     }
 }
