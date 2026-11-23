@@ -5,6 +5,7 @@ from .post_examples import post_body, post_created_at
 
 TOPICS = ("backend", "travel", "fitness", "ai_dev", "travel_video", "fitness_food")
 POSTS = 1200
+SAMPLE_PASSWORD_HASH = "$argon2id$v=19$m=16384,t=2,p=1$McNMQwbfzzJatCcepcOiUQ$rI/5udC3EkVK/BfDLYDs66iFU8b6cZwKMei9/+wEOzI"
 USERNAMES = {
     1: "minjun_dev",
     2: "jiwoo_trip",
@@ -52,7 +53,7 @@ def post_fields(post_id: int) -> tuple[int, str]:
 
 def seed():
     now = datetime.now(UTC)
-    users = [(user_id, username, now, now) for user_id, username in USERNAMES.items()]
+    users = [(i, name, SAMPLE_PASSWORD_HASH, now, now) for i, name in USERNAMES.items()]
     posts = [
         (i, *post_fields(i), (i * 17) % 101, post_created_at(i, now), now)
         for i in range(1, POSTS + 1)
@@ -60,8 +61,8 @@ def seed():
     with source_connection() as conn:
         cursor = conn.cursor()
         cursor.executemany(
-            """INSERT INTO users(id,username,created_at,modified_at)
-            VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+            """INSERT INTO users(id,username,password,created_at,modified_at)
+            VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
             users,
         )
         cursor.executemany(

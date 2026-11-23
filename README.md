@@ -78,15 +78,16 @@ docker compose up -d
 cd sns-front
 npm ci # 처음 한 번만
 npm run dev
-# 가입과 로그인: recommenddemo / recommend1234
+# 로그인: jihoon_codes / sample1234 (part-1 seed의 샘플 계정, 직접 가입은 seed 뒤에)
 ```
 
 ## part별 실행
 
 명령은 `sns-recommend/`에서 실행하고, 브랜치를 바꾸기 전 API와 worker를 `Ctrl+C`로 종료합니다. Windows는 `.\gradlew.bat`, `curl.exe`를 씁니다.
 
+### part-1. 기존 SNS와 실습 환경
+
 ```sh
-# part-1. 기존 SNS와 실습 환경
 git switch part-1-environment
 # SNS 앱 실행 후
 uv sync
@@ -94,8 +95,10 @@ uv sync
 uv run sns-recommend seed
 ```
 
+### part-2. 행동 수집과 후보 수집
+
 ```sh
-# part-2. 행동 수집과 후보 수집 (Ollama 필요: 모델 설정)
+# Ollama 필요: 모델 설정
 git switch part-2-events-embeddings
 # SNS 앱 다시 실행 후 추천 DB 실행
 docker compose up -d
@@ -109,8 +112,9 @@ uv run sns-recommend-event-worker --once
 uv run sns-recommend recall
 ```
 
+### part-3. 순위 모델 학습
+
 ```sh
-# part-3. 순위 모델 학습
 git switch part-3-ranking-model
 # PyTorch 설치. 처음 한 번 약 600MB
 uv sync
@@ -118,8 +122,9 @@ uv sync
 uv run sns-recommend train
 ```
 
+### part-4. 추론과 피드 제공
+
 ```sh
-# part-4. 추론과 피드 제공
 git switch part-4-inference
 # SNS 앱 다시 실행 후
 uv sync
@@ -132,8 +137,9 @@ uv run uvicorn sns_recommend.api:app --host 0.0.0.0 --port 8001
 uv run sns-recommend-worker
 ```
 
+### part-5. 지속 학습 파이프라인
+
 ```sh
-# part-5. 지속 학습 파이프라인
 git switch part-5-mlops
 uv sync
 uv run sns-recommend init
@@ -149,8 +155,9 @@ uv run sns-recommend train
 uv run sns-recommend rollback
 ```
 
+### part-6. A/B 실험과 운영
+
 ```sh
-# part-6. A/B 실험과 운영
 git switch part-6-operations
 uv sync
 uv run sns-recommend init
