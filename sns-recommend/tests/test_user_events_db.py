@@ -34,7 +34,7 @@ def rows(action: str, user_id: int = READER) -> list[dict]:
 def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
-        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,simulation")
+        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     monkeypatch.setattr(seed, "POSTS", POSTS)

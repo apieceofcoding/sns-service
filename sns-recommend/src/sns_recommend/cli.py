@@ -13,9 +13,6 @@ def main():
     simulate.add_argument("--users", type=int, default=300)
     simulate.add_argument("--sessions", type=int, default=15)
     simulate.add_argument("--hours", type=float, default=4)
-    simulate.add_argument(
-        "--shift", action="store_true", help="from now on readers favor fresh posts far more"
-    )
     args = parser.parse_args()
     print(json.dumps(run(args), ensure_ascii=False, default=str))
 
@@ -34,5 +31,5 @@ def run(args):
     if args.command == "simulate":
         from .simulator import simulate
 
-        return simulate(args.users, args.sessions, args.hours, args.shift)
+        return simulate(args.users, args.sessions, args.hours)
     raise ValueError(args.command)
