@@ -78,7 +78,7 @@ docker compose up -d
 cd sns-front
 npm ci # 처음 한 번만
 npm run dev
-# 가입과 로그인: recommenddemo / recommend1234
+# 로그인: jihoon_codes / sample1234 (part-1 seed의 샘플 계정, 직접 가입은 seed 뒤에)
 ```
 
 ## part별 실행
