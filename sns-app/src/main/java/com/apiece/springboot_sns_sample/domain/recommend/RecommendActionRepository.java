@@ -15,6 +15,6 @@ public class RecommendActionRepository {
                 INSERT INTO post_actions(event_id, action, user_id, post_id)
                 SELECT ?, ?, ?, id FROM posts WHERE id = ? AND deleted_at IS NULL
                 ON CONFLICT DO NOTHING
-                """, eventId, action.getValue(), userId, postId);
+                """, eventId, action.name().toLowerCase(), userId, postId);
     }
 }

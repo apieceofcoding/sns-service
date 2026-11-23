@@ -38,7 +38,7 @@ class RecommendActionControllerTest {
     @Test
     void usesLoggedInUser() throws Exception {
         mvc(7L).perform(post("/api/v1/recommend/actions?userId=999").contentType("application/json")
-            .content("{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":4,\"userId\":999}"))
+            .content("{\"eventId\":\"" + eventId + "\",\"action\":\"CLICK\",\"postId\":4,\"userId\":999}"))
             .andExpect(status().isNoContent());
         verify(recommendActionRepository).record(eventId, RecommendAction.CLICK, 7L, 4L);
     }
@@ -46,7 +46,7 @@ class RecommendActionControllerTest {
     @Test
     void requiresLogin() throws Exception {
         mvc(null).perform(post("/api/v1/recommend/actions").contentType("application/json")
-            .content("{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":4}"))
+            .content("{\"eventId\":\"" + eventId + "\",\"action\":\"CLICK\",\"postId\":4}"))
             .andExpect(status().isUnauthorized());
         verifyNoInteractions(recommendActionRepository);
     }
@@ -55,9 +55,10 @@ class RecommendActionControllerTest {
     void rejectsLikesAndInvalidTargets() throws Exception {
         var mvc = mvc(7L);
         for (String body : new String[] {
-            "{\"eventId\":\"" + eventId + "\",\"action\":\"like\",\"postId\":4}",
-            "{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":0}",
-            "{\"action\":\"click\",\"postId\":4}"
+            "{\"eventId\":\"" + eventId + "\",\"action\":\"LIKE\",\"postId\":4}",
+            "{\"eventId\":\"" + eventId + "\",\"action\":\"click\",\"postId\":4}",
+            "{\"eventId\":\"" + eventId + "\",\"action\":\"CLICK\",\"postId\":0}",
+            "{\"action\":\"CLICK\",\"postId\":4}"
         }) mvc.perform(post("/api/v1/recommend/actions").contentType("application/json").content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(recommendActionRepository);
