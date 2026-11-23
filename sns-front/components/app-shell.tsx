@@ -1,5 +1,6 @@
 import type React from "react"
 import { Sidebar } from "./sidebar"
+import { RightPanel } from "./right-panel"
 
 /** Left navigation and a 600px center column, as on X. */
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -7,7 +8,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen justify-center">
       <Sidebar />
       <main className="min-h-screen w-full max-w-[600px] border-x border-border">{children}</main>
-      <div className="hidden w-[350px] shrink-0 lg:block" />
+      <RightPanel />
     </div>
   )
 }
@@ -31,5 +32,20 @@ export function PageHeader({ title, subtitle, onBack }: { title: string; subtitl
         {subtitle && <p className="text-[13px] text-muted-foreground">{subtitle}</p>}
       </div>
     </div>
+  )
+}
+
+/** Menu pages outside the course: a title and an X-style empty state. */
+export function EmptyPage({ title, heading, body }: { title: string; heading: string; body: string }) {
+  return (
+    <AppShell>
+      <div className="sticky top-0 z-10 flex h-[53px] items-center bg-background/65 px-4 backdrop-blur-md">
+        <h1 className="text-xl font-bold">{title}</h1>
+      </div>
+      <div className="mx-auto max-w-[400px] px-8 py-16">
+        <h2 className="text-[31px] font-extrabold leading-9">{heading}</h2>
+        <p className="mt-2 text-muted-foreground">{body}</p>
+      </div>
+    </AppShell>
   )
 }
