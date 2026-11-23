@@ -45,7 +45,7 @@ export function TweetCard({ post, threadLine = false }: TweetCardProps) {
       ([entry]) => {
         if (!entry.isIntersecting) return
         incrementView.mutate(shown.id)
-        postsApi.recordAction("impression", shown.id)
+        postsApi.recordAction("IMPRESSION", shown.id)
         observer.disconnect()
       },
       { threshold: 0.5 },
@@ -55,7 +55,7 @@ export function TweetCard({ post, threadLine = false }: TweetCardProps) {
   }, [shown.id, user])
 
   const open = () => {
-    if (user) postsApi.recordAction("click", shown.id)
+    if (user) postsApi.recordAction("CLICK", shown.id)
     router.push(`/post/${shown.id}`)
   }
 
