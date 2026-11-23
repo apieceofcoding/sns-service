@@ -22,7 +22,7 @@ def load_events() -> list[dict]:
     with connection() as conn:
         return conn.execute(
             """SELECT user_id,post_id,action,occurred_at FROM user_events
-            WHERE action=ANY(%s) AND removed_at IS NULL
+            WHERE action=ANY(%s) AND deleted_at IS NULL
             ORDER BY user_id,occurred_at,post_id""",
             (["impression", *POSITIVE],),
         ).fetchall()

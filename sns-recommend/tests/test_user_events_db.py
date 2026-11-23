@@ -70,7 +70,7 @@ def test_like_is_copied_once_and_cancel_removes_it_from_the_vector() -> None:
     with source_connection() as conn:
         conn.execute("UPDATE likes SET deleted_at=now(),modified_at=now() WHERE id=%s", (like_id,))
     assert event_worker.sync_events() == 1
-    assert rows("like")[0]["removed_at"] is not None
+    assert rows("like")[0]["deleted_at"] is not None
     assert profiles.build_user_vector(READER) is None
 
 
@@ -187,7 +187,7 @@ def test_settled_rows_are_not_read_again_and_late_changes_still_arrive() -> None
     with source_connection() as conn:
         conn.execute("UPDATE likes SET deleted_at=now(),modified_at=now() WHERE id=%s", (like_id,))
     assert event_worker.sync_events() == 1
-    assert rows("like")[0]["removed_at"] is not None
+    assert rows("like")[0]["deleted_at"] is not None
 
 
 def test_large_backlog_is_read_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
