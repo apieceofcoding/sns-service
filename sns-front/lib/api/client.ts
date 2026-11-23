@@ -8,7 +8,7 @@ export class ApiClient {
 
     const response = await fetch(url, {
       ...options,
-      credentials: 'include', // 쿠키 기반 세션을 위해 필요
+      credentials: 'include', // send the session cookie
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,

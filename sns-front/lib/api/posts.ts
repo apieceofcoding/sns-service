@@ -1,21 +1,13 @@
 import { apiClient } from './client'
-import type { Post, PostCreateRequest, PostUpdateRequest } from '@/lib/types'
+import type { Post, PostCreateRequest } from '@/lib/types'
 
 export const postsApi = {
-  getAll: () => {
-    return apiClient.get<Post[]>('/api/v1/posts')
-  },
-
   getById: (id: number) => {
     return apiClient.get<Post>(`/api/v1/posts/${id}`)
   },
 
   create: (data: PostCreateRequest) => {
     return apiClient.post<Post>('/api/v1/posts', data)
-  },
-
-  update: (id: number, data: PostUpdateRequest) => {
-    return apiClient.put<Post>(`/api/v1/posts/${id}`, data)
   },
 
   delete: (id: number) => {
