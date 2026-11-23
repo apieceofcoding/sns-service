@@ -1,13 +1,14 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/app-shell"
 import { UserAvatar } from "@/components/user-avatar"
 import { useAuth } from "@/hooks/api/use-auth"
 import { useUser, useUserFollowCounts, useUserPosts } from "@/hooks/api/use-users"
-import { useIsFollowing, useFollow, useUnfollow } from "@/hooks/api/use-follows"
+import { FollowButton } from "@/components/follow-button"
 import { ProfileEditDialog } from "@/components/profile-edit-dialog"
 
 export type UserProfileTab = "posts" | "replies" | "media" | "likes"
@@ -24,26 +25,13 @@ export function UserProfileHeader({ userId, activeTab, onTabChange }: UserProfil
   const { data: user, isLoading: isUserLoading } = useUser(userId)
   const { data: followCounts } = useUserFollowCounts(userId)
   const { data: posts } = useUserPosts(userId, isAuthenticated)
-  const { data: isFollowing, isLoading: isFollowingLoading } = useIsFollowing(userId, isAuthenticated && me?.id !== userId)
-  const followMutation = useFollow()
-  const unfollowMutation = useUnfollow()
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   const isMe = me?.id === userId
-  const isLoading = isUserLoading || isFollowingLoading
-  const isMutating = followMutation.isPending || unfollowMutation.isPending
 
   const postCount = posts?.length ?? 0
   const followingCount = followCounts?.followeesCount ?? 0
   const followerCount = followCounts?.followersCount ?? 0
-
-  const handleFollowClick = () => {
-    if (isFollowing) {
-      unfollowMutation.mutate(userId)
-    } else {
-      followMutation.mutate(userId)
-    }
-  }
 
   if (isUserLoading) return <p className="p-8 text-center text-muted-foreground">불러오는 중...</p>
   if (!user) return <p className="p-8 text-center text-muted-foreground">사용자를 찾을 수 없습니다.</p>
@@ -73,20 +61,7 @@ export function UserProfileHeader({ userId, activeTab, onTabChange }: UserProfil
               프로필 수정
             </button>
           )}
-          {isAuthenticated && !isMe && (
-            <button
-              type="button"
-              onClick={handleFollowClick}
-              disabled={isMutating || isLoading}
-              className={
-                isFollowing
-                  ? `${pill} border border-[#536471] hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive`
-                  : `${pill} bg-secondary text-secondary-foreground hover:bg-secondary/90`
-              }
-            >
-              {isFollowing ? "팔로잉" : "팔로우"}
-            </button>
-          )}
+          <FollowButton userId={userId} />
         </div>
 
         <div className="mb-3 mt-3 leading-6">
@@ -95,12 +70,12 @@ export function UserProfileHeader({ userId, activeTab, onTabChange }: UserProfil
         </div>
 
         <div className="mb-3 flex gap-5 text-sm">
-          <span>
+          <Link href={`/users/${userId}/following`} className="hover:underline">
             <b>{followingCount.toLocaleString()}</b> <span className="text-muted-foreground">팔로우 중</span>
-          </span>
-          <span>
+          </Link>
+          <Link href={`/users/${userId}/followers`} className="hover:underline">
             <b>{followerCount.toLocaleString()}</b> <span className="text-muted-foreground">팔로워</span>
-          </span>
+          </Link>
         </div>
       </div>
 

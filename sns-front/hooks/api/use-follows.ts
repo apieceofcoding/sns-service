@@ -11,7 +11,7 @@ export function useFollow() {
     mutationFn: (followeeId: number) => followsApi.follow({ followeeId }),
     onSuccess: (_, followeeId) => {
       queryClient.invalidateQueries({ queryKey: ['follows', 'followees'] })
-      queryClient.invalidateQueries({ queryKey: ['follow-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       queryClient.invalidateQueries({ queryKey: ['follows', 'isFollowing', followeeId] })
       toast.success('팔로우했습니다!')
     },
@@ -28,7 +28,7 @@ export function useUnfollow() {
     mutationFn: (followeeId: number) => followsApi.unfollow({ followeeId }),
     onSuccess: (_, followeeId) => {
       queryClient.invalidateQueries({ queryKey: ['follows', 'followees'] })
-      queryClient.invalidateQueries({ queryKey: ['follow-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['users'] })
       queryClient.invalidateQueries({ queryKey: ['follows', 'isFollowing', followeeId] })
       toast.success('언팔로우했습니다!')
     },
