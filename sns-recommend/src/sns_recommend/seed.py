@@ -85,9 +85,16 @@ def image_of(post_id: int) -> str | None:
 def seed():
     now = datetime.now(UTC)
     sizes = upload_images()
-    users = [(i, name, SAMPLE_PASSWORD_HASH, now, now) for i, name in USERNAMES.items()]
+    media = [
+        (i, f"seed/profiles/{name}.webp", uid, sizes[f"seed/profiles/{name}.webp"], now, now)
+        for i, (uid, name) in enumerate(USERNAMES.items(), 1)
+    ]
+    users = [
+        (uid, name, SAMPLE_PASSWORD_HASH, i, now, now)
+        for i, (uid, name) in enumerate(USERNAMES.items(), 1)
+    ]
     follows = [(u, f, now, now) for u in USERNAMES for f in followees(u)]
-    media, posts = [], []
+    posts = []
     for i in range(1, POSTS + 1):
         author_id, content = post_fields(i)
         created_at = post_created_at(i, now)
@@ -100,8 +107,8 @@ def seed():
         clear_tables(conn)
         cursor = conn.cursor()
         cursor.executemany(
-            """INSERT INTO users(id,username,password,created_at,modified_at)
-            VALUES (%s,%s,%s,%s,%s)""",
+            """INSERT INTO users(id,username,password,profile_media_id,created_at,modified_at)
+            VALUES (%s,%s,%s,%s,%s,%s)""",
             users,
         )
         cursor.executemany(
@@ -131,7 +138,7 @@ def seed():
         "users": len(users),
         "posts": len(posts),
         "follows": len(follows),
-        "images": len(media),
+        "images": len(media) - len(users),
         "reference_time": now.isoformat(),
     }
 
@@ -167,8 +174,8 @@ def upload_images():
         if keys:
             s3.delete_objects(Bucket=s.storage_bucket, Delete={"Objects": keys})
     sizes = {}
-    for path in sorted(IMAGES.glob("*.webp")):
-        key = f"seed/{path.name}"
+    for path in sorted(IMAGES.rglob("*.webp")):
+        key = f"seed/{path.relative_to(IMAGES).as_posix()}"
         body = path.read_bytes()
         s3.put_object(Bucket=s.storage_bucket, Key=key, Body=body, ContentType="image/webp")
         sizes[key] = len(body)
