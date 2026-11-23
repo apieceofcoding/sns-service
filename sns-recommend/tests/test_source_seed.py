@@ -31,7 +31,9 @@ def test_seed_replaces_all_sns_data_with_fresh_sample_data():
         ]
         assert all(p["created_at"] > b["created_at"] for p, b in zip(posts, before, strict=True))
         assert len(follows) == sum(len(followees(u)) for u in USERNAMES)
-        assert len(media) == second["images"] > 0
+        assert len(media) == second["images"] + len(USERNAMES)
+        profiles = conn.execute("SELECT profile_media_id FROM users WHERE id=7").fetchone()
+        assert media[0]["path"].startswith("seed/profiles/") and profiles["profile_media_id"]
         new_id = conn.execute(
             "INSERT INTO users(username,created_at,modified_at) VALUES ('me',now(),now()) RETURNING id"
         ).fetchone()["id"]
