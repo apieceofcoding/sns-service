@@ -1,20 +1,15 @@
 package com.apiece.springboot_sns_sample.domain.recommend;
 
 import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
+@Getter
+@RequiredArgsConstructor
 public enum RecommendAction {
     IMPRESSION("impression"),
     CLICK("click");
 
-    private final String value;
-
-    RecommendAction(String value) {
-        this.value = value;
-    }
-
-    // The same lowercase value is used in the request body and in post_actions.action.
     @JsonValue
-    public String value() {
-        return value;
-    }
+    private final String value;
 }
