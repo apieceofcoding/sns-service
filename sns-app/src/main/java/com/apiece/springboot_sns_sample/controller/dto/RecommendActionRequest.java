@@ -1,13 +1,12 @@
 package com.apiece.springboot_sns_sample.controller.dto;
 
-import java.util.Set;
+import com.apiece.springboot_sns_sample.domain.recommend.RecommendAction;
 import java.util.UUID;
 
-public record RecommendActionRequest(UUID eventId, String action, Long postId) {
+public record RecommendActionRequest(UUID eventId, RecommendAction action, Long postId) {
     public RecommendActionRequest {
-        if (eventId == null || action == null || !Set.of("click", "impression").contains(action)
-                || postId == null || postId <= 0) {
-            throw new IllegalArgumentException("eventId, valid action and positive postId required");
+        if (eventId == null || action == null || postId == null || postId <= 0) {
+            throw new IllegalArgumentException("eventId, action and positive postId required");
         }
     }
 }
