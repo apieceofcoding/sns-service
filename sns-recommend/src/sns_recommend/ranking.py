@@ -13,7 +13,7 @@ def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
     with connection() as conn:
         rows = conn.execute(
             """SELECT post_id,action,occurred_at FROM user_events WHERE user_id=%s
-            AND action=ANY(%s) AND removed_at IS NULL
+            AND action=ANY(%s) AND deleted_at IS NULL
             ORDER BY occurred_at DESC,post_id DESC LIMIT %s""",
             (user_id, list(POSITIVE), HISTORY),
         ).fetchall()

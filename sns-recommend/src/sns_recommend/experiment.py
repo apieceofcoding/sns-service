@@ -129,7 +129,7 @@ def report(name: str | None = None) -> dict:
             count(*) FILTER (WHERE e.action='click') AS clicks,
             count(*) FILTER (WHERE e.action='like') AS likes
             FROM served_posts s JOIN user_events e ON e.user_id=s.user_id AND e.post_id=s.post_id
-            AND e.action IN ('impression','click','like') AND e.removed_at IS NULL
+            AND e.action IN ('impression','click','like') AND e.deleted_at IS NULL
             WHERE s.experiment=%s GROUP BY s.arm,s.user_id""",
             (exp["name"],),
         ).fetchall()

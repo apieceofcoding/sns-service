@@ -25,7 +25,7 @@ def load_events() -> list[dict]:
             coalesce(s.strategy<>'explore',false) AS ranked
             FROM user_events e LEFT JOIN served_posts s
             ON e.action='impression' AND s.user_id=e.user_id AND s.post_id=e.post_id
-            WHERE e.action=ANY(%s) AND e.removed_at IS NULL
+            WHERE e.action=ANY(%s) AND e.deleted_at IS NULL
             ORDER BY e.user_id,e.occurred_at,e.post_id""",
             (["impression", *POSITIVE],),
         ).fetchall()

@@ -15,7 +15,7 @@ def build_user_vector(user_id: int, before: datetime | None = None) -> list[floa
     with connection() as conn:
         rows = conn.execute(
             """SELECT post_id FROM user_events WHERE user_id=%s
-            AND action IN ('like','reply','repost','click') AND removed_at IS NULL
+            AND action IN ('like','reply','repost','click') AND deleted_at IS NULL
             AND occurred_at>%s-interval '7 days' AND occurred_at<%s GROUP BY post_id
             ORDER BY max(occurred_at) DESC,post_id DESC LIMIT 20""",
             (user_id, reference, reference),

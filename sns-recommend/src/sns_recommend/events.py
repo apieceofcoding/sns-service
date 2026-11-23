@@ -9,7 +9,7 @@ def excluded_ids(user_id: int, before: datetime | None = None) -> set[int]:
     with connection() as conn:
         rows = conn.execute(
             """SELECT DISTINCT post_id FROM user_events WHERE user_id=%s
-            AND action='impression' AND removed_at IS NULL
+            AND action='impression' AND deleted_at IS NULL
             AND (%s::timestamptz IS NULL OR occurred_at<%s)""",
             (user_id, before, before),
         ).fetchall()
