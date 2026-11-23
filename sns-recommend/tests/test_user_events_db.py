@@ -268,8 +268,11 @@ def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) 
     event_worker.drain()
     result = trainer.retrain(force=True, epochs=2)
     assert result["promoted"] is True and registry.active()["id"] == result["version"]
+    assert trainer.retrain()["trained"] is False
     served = generation.generate(READER)
     assert served["strategy"] == "model" and served["model_version"] == result["version"]
     second = trainer.retrain(force=True, epochs=2)
     registry.promote(second["version"])
     assert registry.rollback() == {"active": result["version"]}
+    with pytest.raises(LookupError):
+        registry.rollback()
