@@ -13,7 +13,6 @@ def post(post_id, *, age_hours=24, likes=0):
         "id": post_id,
         "author_id": 1,
         "body": f"post {post_id}",
-        "version": 1,
         "likes": likes,
         "created_at": NOW - timedelta(hours=age_hours),
     }
@@ -23,8 +22,7 @@ def post(post_id, *, age_hours=24, likes=0):
 def candidates_from(monkeypatch):
     def run(posts, similarities, *, user_vector=(1.0, 0.0), k=30):
         rows = [
-            {"post_id": post_id, "content_version": 1, "similarity": value}
-            for post_id, value in similarities.items()
+            {"post_id": post_id, "similarity": value} for post_id, value in similarities.items()
         ]
 
         class Conn:

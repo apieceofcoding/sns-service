@@ -15,12 +15,10 @@ from sns_recommend import (
     retrieval,
     seed,
     simulator,
-    source,
     training,
     worker,
 )
 from sns_recommend.db import connection, initialize, source_connection
-from sns_recommend.embeddings import embedding_model
 from sns_recommend.sync_cursor import load_position
 
 pytestmark = pytest.mark.skipif(
@@ -133,32 +131,22 @@ def test_reading_without_a_list_asks_the_worker_and_expired_cursor_restarts() ->
     assert again["post_ids"] == first["post_ids"]
 
 
-def pending_index() -> list[int]:
-    with connection() as conn:
-        position = load_position(conn, f"post_index:{embedding_model()}")
-    return indexing.posts_needing_index(source.changed_posts(position, 1000))
-
-
 def drain_index() -> None:
     while indexing.index_changes()["indexed"]:
         pass
 
 
-def test_post_changes_are_indexed_by_version_and_like_count_is_ignored() -> None:
-    assert pending_index()
+def test_only_new_or_edited_posts_are_embedded() -> None:
     drain_index()
-    assert pending_index() == []
     with source_connection() as conn:
         conn.execute("UPDATE posts SET like_count=like_count+1 WHERE id=1")
-    assert pending_index() == []
+    assert indexing.index_changes()["indexed"] == 0
     with source_connection() as conn:
-        conn.execute("UPDATE posts SET content='새 본문',modified_at=now() WHERE id=1")
-    assert pending_index() == [1]
-    event_worker.poll_once()
+        conn.execute("UPDATE posts SET content='새 본문' WHERE id=1")
+    assert indexing.index_changes()["indexed"] == 1
     with source_connection() as conn:
-        conn.execute("UPDATE posts SET deleted_at=now(),modified_at=now() WHERE id=1")
-    assert pending_index() == [1]
-    event_worker.poll_once()
+        conn.execute("UPDATE posts SET deleted_at=now() WHERE id=1")
+    indexing.index_changes()
     with connection() as conn:
         gone = conn.execute("SELECT 1 FROM post_embeddings WHERE post_id=1").fetchone()
     assert gone is None

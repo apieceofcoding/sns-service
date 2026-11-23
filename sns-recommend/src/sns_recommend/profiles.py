@@ -13,22 +13,13 @@ def build_user_vector(user_id: int, before: datetime | None = None) -> list[floa
         raise LookupError("unknown user")
     reference = before or datetime.now(UTC)
     with connection() as conn:
-        rows = conn.execute(
-            """SELECT post_id FROM user_events WHERE user_id=%s
-            AND action IN ('like','reply','repost','click') AND deleted_at IS NULL
-            AND occurred_at>%s-interval '7 days' AND occurred_at<%s GROUP BY post_id
-            ORDER BY max(occurred_at) DESC,post_id DESC LIMIT 20""",
-            (user_id, reference, reference),
-        ).fetchall()
-        ids = [r["post_id"] for r in rows]
-        rows = conn.execute(
-            """SELECT post_id,content_version,embedding::text FROM post_embeddings
-            WHERE post_id=ANY(%s) AND model=%s""",
-            (ids, embedding_model()),
-        ).fetchall()
-    versions = source.current_versions(ids)
-    by_id = {r["post_id"]: r for r in rows if versions.get(r["post_id"]) == r["content_version"]}
-    vectors = [json.loads(by_id[i]["embedding"]) for i in ids if i in by_id][:5]
-    if not vectors:
-        return None
-    return normalize([sum(v[i] for v in vectors) / len(vectors) for i in range(len(vectors[0]))])
+        row = conn.execute(
+            """SELECT avg(embedding)::text AS mean FROM (
+            SELECT p.embedding FROM user_events e JOIN post_embeddings p USING (post_id)
+            WHERE e.user_id=%s AND e.action IN ('like','reply','repost','click')
+            AND e.deleted_at IS NULL AND p.model=%s
+            AND e.occurred_at>%s-interval '7 days' AND e.occurred_at<%s
+            GROUP BY p.post_id ORDER BY max(e.occurred_at) DESC,p.post_id DESC LIMIT 5) recent""",
+            (user_id, embedding_model(), reference, reference),
+        ).fetchone()
+    return normalize(json.loads(row["mean"])) if row["mean"] else None
