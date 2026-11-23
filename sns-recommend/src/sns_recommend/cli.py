@@ -14,9 +14,6 @@ def main():
     simulate.add_argument("--users", type=int, default=300)
     simulate.add_argument("--sessions", type=int, default=15)
     simulate.add_argument("--hours", type=float, default=4)
-    simulate.add_argument(
-        "--shift", action="store_true", help="from now on readers favor fresh posts far more"
-    )
     for name in ("profile", "candidates", "generate"):
         commands.add_parser(name).add_argument("--user", type=int, default=7)
     commands.add_parser("recall").add_argument("--hours", type=float, default=1)
@@ -40,7 +37,7 @@ def run(args):
     if args.command == "simulate":
         from .simulator import simulate
 
-        return simulate(args.users, args.sessions, args.hours, args.shift)
+        return simulate(args.users, args.sessions, args.hours)
     if args.command == "profile":
         from .profiles import build_user_vector
 
