@@ -11,7 +11,7 @@ export function usePresignedUrl(mediaId: number | null | undefined) {
     queryKey: ['media', 'presigned', mediaId],
     queryFn: () => mediaApi.getPresignedUrl(mediaId!),
     enabled: !!mediaId,
-    staleTime: 5 * 60 * 1000, // 5분 캐싱
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -33,7 +33,7 @@ export interface UploadingMedia {
   status: 'uploading' | 'completed' | 'error'
 }
 
-const CHUNK_SIZE = 8 * 1024 * 1024 // 8MB per part for multipart upload (matches backend)
+const CHUNK_SIZE = 8 * 1024 * 1024 // must match the server's part size
 
 function getMediaType(file: File): MediaType {
   if (file.type.startsWith('video/')) {
@@ -98,8 +98,7 @@ export function useMediaUpload() {
       setCompletedMediaIds(prev => [...prev, mediaId])
 
       return mediaId
-    } catch (error) {
-      console.error('Media upload failed:', error)
+    } catch {
       toast.error('미디어 업로드 실패')
       setUploadingMedia(prev => prev.map(m =>
         m.id === tempId ? { ...m, status: 'error' } : m

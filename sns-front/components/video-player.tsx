@@ -20,7 +20,7 @@ interface VideoPlayerProps {
   muted?: boolean
   loop?: boolean
   isGif?: boolean
-  autoPlayOnView?: boolean // 뷰포트에 들어오면 자동재생
+  autoPlayOnView?: boolean
 }
 
 export function VideoPlayer({
@@ -155,7 +155,7 @@ export function VideoPlayer({
         })
       },
       {
-        threshold: 0.5, // 50% 이상 보일 때
+        threshold: 0.5,
       }
     )
 
@@ -275,8 +275,8 @@ export function VideoPlayer({
       } else {
         await container.requestFullscreen()
       }
-    } catch (err) {
-      console.error('Fullscreen error:', err)
+    } catch {
+      // The browser refused fullscreen; keep playing inline.
     }
   }
 

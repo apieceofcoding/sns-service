@@ -13,7 +13,7 @@ interface ProfileAvatarProps {
 
 const sizeClasses = {
   sm: "w-5 h-5",
-  md: "w-12 h-12",
+  md: "size-10",
   lg: "w-32 h-32"
 }
 
@@ -26,7 +26,7 @@ export function ProfileAvatar({ mediaId, username, size = "md", className }: Pro
   return (
     <div
       className={cn(
-        "rounded-full bg-muted flex-shrink-0 overflow-hidden flex items-center justify-center",
+        "rounded-full bg-[#333639] flex-shrink-0 overflow-hidden flex items-center justify-center",
         sizeClasses[size],
         className
       )}

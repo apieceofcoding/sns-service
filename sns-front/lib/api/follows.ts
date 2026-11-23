@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Follow, FollowRequest, FollowResponse, FollowCountResponse } from '@/lib/types'
+import type { FollowRequest, FollowResponse } from '@/lib/types'
 
 export const followsApi = {
   follow: (data: FollowRequest) => {
@@ -8,18 +8,6 @@ export const followsApi = {
 
   unfollow: (data: FollowRequest) => {
     return apiClient.delete<void>('/api/v1/follows', { body: JSON.stringify(data) })
-  },
-
-  getFollowers: () => {
-    return apiClient.get<Follow[]>('/api/v1/follows/followers')
-  },
-
-  getFollowees: () => {
-    return apiClient.get<Follow[]>('/api/v1/follows/followees')
-  },
-
-  getFollowCounts: () => {
-    return apiClient.get<FollowCountResponse>('/api/v1/follow_counts')
   },
 
   isFollowing: (followeeId: number) => {

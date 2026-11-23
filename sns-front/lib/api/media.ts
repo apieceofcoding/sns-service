@@ -19,12 +19,4 @@ export const mediaApi = {
   getPresignedUrl: (id: number) => {
     return apiClient.get<PresignedUrlResponse>(`/api/v1/media/${id}/presigned-url`)
   },
-
-  getUserMedia: (userId: number) => {
-    return apiClient.get<MediaResponse[]>(`/api/v1/users/${userId}/media`)
-  },
-
-  delete: (id: number) => {
-    return apiClient.delete<void>(`/api/v1/media/${id}`)
-  },
 }

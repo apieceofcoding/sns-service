@@ -1,6 +1,6 @@
 'use client'
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { authApi } from '@/lib/api/auth'
@@ -10,7 +10,6 @@ import type { UserSignupRequest } from '@/lib/types'
 
 export function useAuth() {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const { user, isLoading, isAuthenticated } = useAuthContext()
 
   const loginMutation = useMutation({
@@ -20,9 +19,8 @@ export function useAuth() {
       toast.success('로그인 성공!')
       window.location.href = '/'
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('로그인 실패: 아이디나 비밀번호를 확인해주세요.')
-      console.error('Login error:', error)
     },
   })
 
@@ -31,8 +29,7 @@ export function useAuth() {
     onSuccess: () => {
       toast.success('로그아웃되었습니다.')
     },
-    onError: (error) => {
-      console.error('Logout error:', error)
+    onError: () => {
     },
     onSettled: () => {
       window.location.href = '/login'
@@ -45,9 +42,8 @@ export function useAuth() {
       toast.success('회원가입 성공! 로그인해주세요.')
       router.push('/login')
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('회원가입 실패: 이미 존재하는 사용자명이거나 오류가 발생했습니다.')
-      console.error('Signup error:', error)
     },
   })
 
