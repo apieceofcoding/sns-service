@@ -14,17 +14,3 @@ export interface ReplyCreateRequest {
   content: string
   mediaIds?: number[]
 }
-
-export interface ReplyUpdateRequest {
-  content: string
-}
-
-export interface ReplyResponse {
-  id: number
-  content: string
-  userId: number
-  username: string
-  parentId: number
-  createdAt: string
-  modifiedAt: string
-}

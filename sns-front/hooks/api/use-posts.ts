@@ -3,14 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { postsApi } from '@/lib/api/posts'
-import type { Post, PostCreateRequest, PostUpdateRequest } from '@/lib/types'
-
-export function usePosts() {
-  return useQuery({
-    queryKey: ['posts'],
-    queryFn: () => postsApi.getAll(),
-  })
-}
+import type { Post, PostCreateRequest } from '@/lib/types'
 
 export function usePost(id: number | null) {
   return useQuery({
@@ -31,32 +24,13 @@ export function useCreatePost() {
       queryClient.invalidateQueries({ queryKey: ['profile', 'posts'] })
       toast.success('게시물이 작성되었습니다!')
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('게시물 작성 실패')
-      console.error('Create post error:', error)
     },
   })
 }
 
-export function useUpdatePost() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: PostUpdateRequest }) =>
-      postsApi.update(id, data),
-    onSuccess: (updatedPost) => {
-      queryClient.setQueryData(['posts', updatedPost.id], updatedPost)
-      queryClient.invalidateQueries({ queryKey: ['posts'] })
-      queryClient.invalidateQueries({ queryKey: ['timeline'] })
-      toast.success('게시물이 수정되었습니다!')
-    },
-    onError: (error) => {
-      toast.error('게시물 수정 실패')
-      console.error('Update post error:', error)
-    },
-  })
-}
-
+// A post counts one view per page load.
 const viewedPostIds = new Set<number>()
 
 export function useIncrementView() {
@@ -92,7 +66,7 @@ export function useDeletePost() {
 
       return { previousPosts, previousTimeline }
     },
-    onError: (error, id, context) => {
+    onError: (_error, id, context) => {
       if (context?.previousPosts) {
         queryClient.setQueryData(['posts'], context.previousPosts)
       }
@@ -100,7 +74,6 @@ export function useDeletePost() {
         queryClient.setQueryData(['timeline'], context.previousTimeline)
       }
       toast.error('게시물 삭제 실패')
-      console.error('Delete post error:', error)
     },
     onSuccess: () => {
       toast.success('게시물이 삭제되었습니다!')

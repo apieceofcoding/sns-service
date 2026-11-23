@@ -8,8 +8,3 @@ export class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
-
-export interface ApiResponse<T> {
-  data: T
-  message?: string
-}
