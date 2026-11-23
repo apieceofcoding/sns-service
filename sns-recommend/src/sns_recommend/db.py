@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from .config import settings
@@ -35,3 +36,9 @@ def initialize():
     with connection() as conn:
         for path in sorted((root / "sql").glob("*.sql")):
             conn.execute(path.read_text())
+
+
+def clear_tables(conn):
+    tables = conn.execute("SELECT tablename FROM pg_tables WHERE schemaname='public'").fetchall()
+    names = sql.SQL(",").join(sql.Identifier(t["tablename"]) for t in tables)
+    conn.execute(sql.SQL("TRUNCATE {} RESTART IDENTITY").format(names))

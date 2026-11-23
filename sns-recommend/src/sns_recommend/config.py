@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     model_timeout_seconds: float = 120
     embedding_model: str = "qwen3-embedding:0.6b"
     dimensions: int = 768
+    sns_redis_url: str = "redis://localhost:6379/0"
+    storage_url: str = "http://localhost:9000"
+    storage_bucket: str = "media"
+    storage_access_key: str = "rustfsadmin"
+    storage_secret_key: SecretStr = SecretStr("rustfsadmin")
 
 
 @lru_cache
