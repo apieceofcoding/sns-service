@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "rustfs")
 public record RustFsProperties(
         String endpoint,
+        String publicEndpoint,
         String accessKey,
         String secretKey,
         String bucket,

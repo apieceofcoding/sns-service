@@ -2,7 +2,8 @@ import argparse
 import json
 from datetime import UTC, datetime
 
-from .db import initialize
+from .db import clear_tables, connection, initialize
+from .feed import redis_client
 
 
 def main():
@@ -41,6 +42,9 @@ def run(args):
         from .seed import seed
 
         initialize()
+        with connection() as conn:
+            clear_tables(conn)
+        redis_client().flushdb()
         return seed()
     if args.command == "simulate":
         from .simulator import simulate

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     retrain_min_sessions: int = 200
     train_sessions: int = 2400
     explore_rate: float = 0.1
+    sns_redis_url: str = "redis://localhost:6379/0"
+    storage_url: str = "http://localhost:9000"
+    storage_bucket: str = "media"
+    storage_access_key: str = "rustfsadmin"
+    storage_secret_key: SecretStr = SecretStr("rustfsadmin")
 
 
 @lru_cache
