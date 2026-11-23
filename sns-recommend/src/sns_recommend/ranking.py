@@ -37,7 +37,7 @@ def rank(user_id: int, candidates: list[dict]) -> dict:
         "labels": [[0.0] * len(LABELS)] * len(scored),
     }
     values = score(model, encode([session], features))[0][: len(scored)].tolist()
-    if len(values) != len(scored) or not all(math.isfinite(v) for v in values):
+    if not all(math.isfinite(v) for v in values):
         return {"ids": retrieval_order, "scores": None, "strategy": "embedding_fallback"}
     scores = dict(zip(scored, values, strict=True))
     ids = sorted(scored, key=lambda i: -scores[i]) + [i for i in retrieval_order if i not in scores]

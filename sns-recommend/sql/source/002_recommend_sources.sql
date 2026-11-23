@@ -1,4 +1,3 @@
-ALTER TABLE posts ADD COLUMN IF NOT EXISTS content_version bigint NOT NULL DEFAULT 1;
 CREATE TABLE IF NOT EXISTS post_actions (
  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
  event_id uuid NOT NULL UNIQUE,
@@ -10,19 +9,6 @@ CREATE TABLE IF NOT EXISTS post_actions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS post_actions_one_impression
  ON post_actions(user_id,post_id) WHERE action='impression';
-CREATE OR REPLACE FUNCTION recommend_post_version() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
- IF NEW.content IS DISTINCT FROM OLD.content OR NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN
-  NEW.content_version := OLD.content_version+1;
- ELSE
-  NEW.content_version := OLD.content_version;
- END IF;
- RETURN NEW;
-END $$;
-DROP TRIGGER IF EXISTS recommend_version ON posts;
-CREATE TRIGGER recommend_version BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION recommend_post_version();
+CREATE INDEX IF NOT EXISTS post_actions_sync ON post_actions(recorded_at,id);
 CREATE INDEX IF NOT EXISTS likes_sync ON likes(modified_at,id);
 CREATE INDEX IF NOT EXISTS posts_sync ON posts(modified_at,id);
-CREATE INDEX IF NOT EXISTS posts_action_sync ON posts(modified_at,id)
- WHERE parent_id IS NOT NULL OR repost_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS post_actions_sync ON post_actions(recorded_at,id);

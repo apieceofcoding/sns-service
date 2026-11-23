@@ -54,9 +54,8 @@ def cursor_encode(user_id, snapshot_id, offset):
 def cursor_decode(cursor, user_id):
     try:
         owner, snapshot, offset = json.loads(base64.urlsafe_b64decode(cursor))
-        if owner != user_id or not (isinstance(snapshot, str) and snapshot.isalnum()):
-            raise ValueError()
-        if type(offset) is not int or offset < 0:
+        valid = owner == user_id and isinstance(snapshot, str) and snapshot.isalnum()
+        if not valid or type(offset) is not int or offset < 0:
             raise ValueError()
         return snapshot, offset
     except Exception as exc:

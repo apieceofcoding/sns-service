@@ -20,17 +20,12 @@ def candidate_pool(user_id, reference, user_vector, seen_before=None):
     if user_vector is not None:
         with connection() as conn:
             similar = conn.execute(
-                """SELECT post_id,content_version,
-                1-(embedding <=> %s::vector) AS similarity FROM post_embeddings
+                """SELECT post_id,1-(embedding <=> %s::vector) AS similarity FROM post_embeddings
                 WHERE model=%s AND post_id=ANY(%s)""",
                 (vector_sql(user_vector), embedding_model(), [p["id"] for p in posts]),
             ).fetchall()
-    similarity = {(r["post_id"], r["content_version"]): r["similarity"] for r in similar}
-    return [
-        {**p, "similarity": similarity.get((p["id"], p["version"]))}
-        for p in posts
-        if p["id"] not in excluded
-    ]
+    similarity = {r["post_id"]: r["similarity"] for r in similar}
+    return [{**p, "similarity": similarity.get(p["id"])} for p in posts if p["id"] not in excluded]
 
 
 def candidate_recall(hours: float = 1, k: int = 30) -> dict:

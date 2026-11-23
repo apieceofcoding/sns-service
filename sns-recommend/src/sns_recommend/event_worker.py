@@ -3,9 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import signal
-from threading import Event
-from types import FrameType
+import time
 
 from .db import connection, source_connection
 from .indexing import index_changes
@@ -52,25 +50,16 @@ def sync_source(name, query):
             settled = settled_before(source)
             rows = source.execute(query, (*reading, BATCH_SIZE)).fetchall()
         with connection() as conn:
-            known = {
-                (row["action"], row["source_id"]): row["deleted_at"]
-                for row in conn.execute(
-                    "SELECT action,source_id,deleted_at FROM user_events WHERE source_id=ANY(%s)",
-                    ([row["source_id"] for row in rows],),
-                ).fetchall()
-            }
-            changed = [
-                row
-                for row in rows
-                if known.get((row["action"], row["source_id"]), "new") != row["deleted_at"]
-            ]
-            conn.cursor().executemany(
+            cur = conn.cursor()
+            cur.executemany(
                 """INSERT INTO user_events(source_id,action,user_id,post_id,occurred_at,deleted_at)
                 VALUES (%(source_id)s,%(action)s,%(user_id)s,%(post_id)s,
                 %(occurred_at)s,%(deleted_at)s)
-                ON CONFLICT(source_id,action) DO UPDATE SET deleted_at=EXCLUDED.deleted_at""",
-                changed,
+                ON CONFLICT(source_id,action) DO UPDATE SET deleted_at=EXCLUDED.deleted_at
+                WHERE user_events.deleted_at IS DISTINCT FROM EXCLUDED.deleted_at""",
+                rows,
             )
+            changed = cur.rowcount if rows else 0
             position = next_position(rows, position, settled)
             save_position(conn, name, position)
         if changed or len(rows) < BATCH_SIZE:
@@ -79,7 +68,7 @@ def sync_source(name, query):
 
 
 def sync_events() -> int:
-    return sum(len(sync_source(*source)) for source in ACTION_SOURCES)
+    return sum(sync_source(*source) for source in ACTION_SOURCES)
 
 
 def poll_once() -> dict[str, int]:
@@ -89,39 +78,28 @@ def poll_once() -> dict[str, int]:
 
 
 def drain() -> dict[str, int]:
-    total: dict[str, int] = {}
-    while True:
-        result = poll_once()
-        for key, value in result.items():
-            total[key] = total.get(key, 0) + value
-        if not result["processed"]:
-            return total
+    total = {"processed": 0, "events": 0, "indexed": 0}
+    while (result := poll_once())["processed"]:
+        for key in total:
+            total[key] += result[key]
+    return total
 
 
 def run_poller() -> None:
-    stop = Event()
-
-    def shutdown(signum: int, frame: FrameType | None) -> None:
-        stop.set()
-
-    previous = {sig: signal.signal(sig, shutdown) for sig in (signal.SIGINT, signal.SIGTERM)}
     delay = 3
-    try:
-        while not stop.is_set():
-            try:
-                result = poll_once()
-                if result["processed"]:
-                    logger.info("processed=%s", result["processed"])
-                delay = 3
-                if not result["processed"]:
-                    stop.wait(3)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Event worker retry in %ss: %s", delay, type(exc).__name__)
-                stop.wait(delay)
-                delay = min(delay * 2, 30)
-    finally:
-        for sig, handler in previous.items():
-            signal.signal(sig, handler)
+    while True:
+        try:
+            processed = poll_once()["processed"]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Event worker retry in %ss: %s", delay, type(exc).__name__)
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+            continue
+        delay = 3
+        if processed:
+            logger.info("processed=%s", processed)
+        else:
+            time.sleep(3)
 
 
 def main() -> None:
