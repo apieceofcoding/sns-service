@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from random import Random
 from uuid import uuid4
 
-from .db import connection, source_connection
+from .db import source_connection
 from .seed import AUTHORS, TOPICS, advance_identity, topic_of
 from .source import VISIBLE
 
@@ -19,20 +19,11 @@ READERS = {
 FIRST_SIMULATED_USER = 101
 SLOT = timedelta(minutes=6)
 SHOWN = 10
+AGE_COST = 0.05
 
 
 def readers(users: int = 300) -> list[int]:
     return list(READERS) + list(range(FIRST_SIMULATED_USER, FIRST_SIMULATED_USER + users))
-
-
-def age_cost(shift: bool = False) -> float:
-    with connection() as conn:
-        row = conn.execute(
-            """INSERT INTO simulation(shifted) VALUES (%s) ON CONFLICT (only_row)
-            DO UPDATE SET shifted=simulation.shifted OR %s RETURNING shifted""",
-            (shift, shift),
-        ).fetchone()
-    return 0.5 if row["shifted"] else 0.05
 
 
 def taste(user_id: int) -> dict[str, float]:
@@ -93,11 +84,11 @@ def write(impressions: list, actions: list, likes: list) -> None:
             )
 
 
-def simulate(users: int = 300, sessions: int = 15, hours: float = 4, shift: bool = False):
+def simulate(users: int = 300, sessions: int = 15, hours: float = 4):
     now = datetime.now(UTC)
     start = now - timedelta(hours=hours)
     reader_ids = readers(users)
-    hourly_cost = age_cost(shift)
+    hourly_cost = AGE_COST
     rnd = Random(f"{now:%Y%m%d%H}:{hourly_cost}")
     rows: tuple[list, list, list] = ([], [], [])
     with source_connection() as conn:
@@ -138,5 +129,4 @@ def simulate(users: int = 300, sessions: int = 15, hours: float = 4, shift: bool
         "clicks": len(actions),
         "likes": len(likes),
         "click_rate": round(len(actions) / max(1, len(impressions)), 3),
-        "age_cost_per_hour": hourly_cost,
     }
