@@ -16,26 +16,8 @@ export function useCreateQuote() {
       queryClient.invalidateQueries({ queryKey: ['timeline'] })
       toast.success('인용글이 작성되었습니다!')
     },
-    onError: (error) => {
+    onError: () => {
       toast.error('인용글 작성 실패')
-      console.error('Create quote error:', error)
-    },
-  })
-}
-
-export function useDeleteQuote() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (quoteId: number) => quotesApi.delete(quoteId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] })
-      queryClient.invalidateQueries({ queryKey: ['timeline'] })
-      toast.success('인용글이 삭제되었습니다!')
-    },
-    onError: (error) => {
-      toast.error('인용글 삭제 실패')
-      console.error('Delete quote error:', error)
     },
   })
 }

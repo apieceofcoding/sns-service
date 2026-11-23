@@ -5,24 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { profileApi } from '@/lib/api/profile'
 
-export function useMyPosts(enabled: boolean = true) {
-  return useQuery({
-    queryKey: ['profile', 'posts'],
-    queryFn: () => profileApi.getMyPosts(),
-    enabled,
-    retry: false,
-  })
-}
-
-export function useMyReplies(enabled: boolean = true) {
-  return useQuery({
-    queryKey: ['profile', 'replies'],
-    queryFn: () => profileApi.getMyReplies(),
-    enabled,
-    retry: false,
-  })
-}
-
 export function useMyLikes(enabled: boolean = true) {
   return useQuery({
     queryKey: ['profile', 'likes'],
@@ -30,18 +12,6 @@ export function useMyLikes(enabled: boolean = true) {
     enabled,
     retry: false,
   })
-}
-
-export function useMyMediaPosts(enabled: boolean = true) {
-  const { data: posts, isLoading, error } = useMyPosts(enabled)
-
-  const mediaPosts = posts?.filter(post => post.mediaIds && post.mediaIds.length > 0) ?? []
-
-  return {
-    data: mediaPosts,
-    isLoading,
-    error,
-  }
 }
 
 export function useProfileImageUpload() {
@@ -62,7 +32,7 @@ export function useProfileImageUpload() {
 
       if (initResponse.presignedUrl) {
         await uploadToS3(file, initResponse.presignedUrl, (p) => {
-          setProgress(20 + Math.round(p * 0.6)) // 20-80%
+          setProgress(20 + Math.round(p * 0.6))
         })
       }
 
@@ -76,8 +46,7 @@ export function useProfileImageUpload() {
 
       toast.success('프로필 이미지가 업데이트되었습니다!')
       return true
-    } catch (error) {
-      console.error('Profile image upload failed:', error)
+    } catch {
       toast.error('프로필 이미지 업로드 실패')
       return false
     } finally {
