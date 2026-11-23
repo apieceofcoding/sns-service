@@ -77,15 +77,14 @@ def post_features(post_ids) -> dict[int, dict]:
     ids = sorted(set(post_ids))
     with connection() as conn:
         rows = conn.execute(
-            """SELECT post_id,content_version,embedding::text FROM post_embeddings
-            WHERE post_id=ANY(%s) AND model=%s""",
+            "SELECT post_id,embedding::text FROM post_embeddings WHERE post_id=ANY(%s) AND model=%s",
             (ids, embedding_model()),
         ).fetchall()
     created = source.created_times(ids)
     return {
-        r["post_id"]: {"vector": json.loads(r["embedding"]), "created_at": created[r["post_id"]][1]}
+        r["post_id"]: {"vector": json.loads(r["embedding"]), "created_at": created[r["post_id"]]}
         for r in rows
-        if r["post_id"] in created and created[r["post_id"]][0] == r["content_version"]
+        if r["post_id"] in created
     }
 
 

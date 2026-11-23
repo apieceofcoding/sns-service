@@ -6,16 +6,9 @@ from random import Random
 from uuid import uuid4
 
 from .db import connection, source_connection
-from .seed import AUTHORS, TOPICS, advance_identity, post_fields, topic_of
+from .seed import AUTHORS, READERS, TOPICS, advance_identity, post_fields, topic_of
 from .source import VISIBLE
 
-READERS = {
-    7: ("backend", "ai_dev"),
-    8: ("travel", "travel_video"),
-    9: ("fitness", "fitness_food"),
-    17: ("travel", "fitness"),
-    18: ("ai_dev", "travel_video"),
-}
 FIRST_SIMULATED_USER = 101
 SLOT = timedelta(minutes=6)
 SHOWN = 10
