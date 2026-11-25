@@ -41,35 +41,35 @@ def history_before(events: list[dict], at: datetime) -> list[tuple[int, str, dat
 
 def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict]:
     closed = (now or datetime.now(UTC)) - LABEL_WINDOW
-    sessions: list[dict] = []
     by_user: dict[int, list[dict]] = {}
     for event in events:
         by_user.setdefault(event["user_id"], []).append(event)
+    sessions: list[dict] = []
     for user_id, rows in by_user.items():
-        reactions: dict[int, list[tuple[str, datetime]]] = {}
+        reactions: dict[int, list[dict]] = {}
         for row in rows:
             if row["action"] in POSITIVE:
-                reactions.setdefault(row["post_id"], []).append((row["action"], row["occurred_at"]))
-        current: dict | None = None
+                reactions.setdefault(row["post_id"], []).append(row)
+        session: dict | None = None
         for row in rows:
-            if row["action"] != "impression" or row["occurred_at"] > closed:
+            shown_at = row["occurred_at"]
+            if row["action"] != "impression" or shown_at > closed:
                 continue
-            if current is None or row["occurred_at"] - current["last"] > SESSION_GAP:
-                history = history_before(rows, row["occurred_at"])
-                current = {"user_id": user_id, "start": row["occurred_at"], "history": history}
-                current["candidates"], current["labels"], current["ranked"] = [], [], False
-                sessions.append(current)
-            current["last"] = row["occurred_at"]
-            current["ranked"] |= row.get("ranked", False)
-            if len(current["candidates"]) < CANDIDATES:
-                shown_at = row["occurred_at"]
+            if session is None or shown_at - session["last"] > SESSION_GAP:
+                history = history_before(rows, shown_at)
+                session = {"user_id": user_id, "start": shown_at, "history": history}
+                session["candidates"], session["labels"], session["ranked"] = [], [], False
+                sessions.append(session)
+            session["last"] = shown_at
+            session["ranked"] |= row.get("ranked", False)
+            if len(session["candidates"]) < CANDIDATES:
                 done = {
-                    action
-                    for action, at in reactions.get(row["post_id"], ())
-                    if shown_at <= at <= shown_at + LABEL_WINDOW
+                    r["action"]
+                    for r in reactions.get(row["post_id"], ())
+                    if shown_at <= r["occurred_at"] <= shown_at + LABEL_WINDOW
                 }
-                current["candidates"].append(row["post_id"])
-                current["labels"].append([float(label in done) for label in LABELS])
+                session["candidates"].append(row["post_id"])
+                session["labels"].append([float(label in done) for label in LABELS])
     return sorted(sessions, key=lambda s: s["start"])
 
 
@@ -89,12 +89,9 @@ def post_features(post_ids) -> dict[int, dict]:
 
 
 def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.Tensor]:
-    ids = sorted(features)
-    index = {post_id: i + 1 for i, post_id in enumerate(ids)}
-    dims = len(features[ids[0]]["vector"]) if ids else 1
-    table = torch.zeros(len(ids) + 1, dims)
-    for post_id, i in index.items():
-        table[i] = torch.tensor(features[post_id]["vector"])
+    index = {post_id: i + 1 for i, post_id in enumerate(sorted(features))}
+    vectors = [features[post_id]["vector"] for post_id in index]
+    table = torch.tensor([[0.0] * len(vectors[0]), *vectors]) if vectors else torch.zeros(1, 1)
     n = len(sessions)
     batch = {
         "table": table,
@@ -107,17 +104,12 @@ def encode(sessions: list[dict], features: dict[int, dict]) -> dict[str, torch.T
     }
     for row, session in enumerate(sessions):
         history = [h for h in session["history"] if h[0] in index][-HISTORY:]
-        offset = HISTORY - len(history)
-        for j, (post_id, action, at) in enumerate(history):
-            batch["history"][row, offset + j] = index[post_id]
-            batch["actions"][row, offset + j] = ACTIONS[action]
-            batch["history_age"][row, offset + j] = days(session["start"] - at)
-        kept = [
-            (c, y)
-            for c, y in zip(session["candidates"], session["labels"], strict=True)
-            if c in index
-        ]
-        for j, (post_id, label) in enumerate(kept[:CANDIDATES]):
+        for j, (post_id, action, at) in enumerate(history, HISTORY - len(history)):
+            batch["history"][row, j] = index[post_id]
+            batch["actions"][row, j] = ACTIONS[action]
+            batch["history_age"][row, j] = days(session["start"] - at)
+        shown = zip(session["candidates"], session["labels"], strict=True)
+        for j, (post_id, label) in enumerate([s for s in shown if s[0] in index][:CANDIDATES]):
             batch["candidates"][row, j] = index[post_id]
             batch["candidate_age"][row, j] = days(
                 session["start"] - features[post_id]["created_at"]
