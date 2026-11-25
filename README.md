@@ -217,7 +217,7 @@ docker compose up -d  # part-2부터
 | SNS DB (`snsdb`, 5432)       | 회원, 게시글, 좋아요 원본과 post_actions                               | `SOURCE_DATABASE_URL` |
 | 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터, 모델 버전, 생성 기록, 서빙 기록, 실험 | `DATABASE_URL`        |
 | Redis (56379)                | 완성된 추천 ID 목록                                                    | `REDIS_URL`           |
-| `sns-recommend/models/`      | 학습한 모델 파일                                                       | `MODEL_DIR`           |
+| `sns-recommend/models/`      | 학습한 모델 파일                                                       | 기본 경로             |
 
 ## 모델 설정
 
