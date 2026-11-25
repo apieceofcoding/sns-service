@@ -36,7 +36,6 @@ def candidates_from(monkeypatch):
         def connection():
             yield Conn()
 
-        monkeypatch.setattr(retrieval.source, "user_exists", lambda _: True)
         monkeypatch.setattr(retrieval.source, "recent_posts", lambda *_: posts)
         monkeypatch.setattr(retrieval, "connection", connection)
         monkeypatch.setattr(retrieval, "excluded_ids", lambda *_: set())

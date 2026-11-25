@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import argparse
-import json
 import logging
 import time
 
@@ -18,7 +16,7 @@ def due_users() -> list[int]:
     with connection() as conn:
         rows = conn.execute(
             """SELECT DISTINCT user_id FROM user_events
-            WHERE occurred_at>now()-interval '30 minutes' ORDER BY user_id"""
+            WHERE occurred_at>now()-interval '30 minutes'"""
         ).fetchall()
     due = {int(u) for u in redis_client().spop(WANTED, 1000) or []}
     for row in rows:
@@ -41,12 +39,6 @@ def run_once() -> int:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--once", action="store_true", help="rebuild due lists once, then exit")
-    args = parser.parse_args()
-    if args.once:
-        print(json.dumps({"generated": run_once()}))
-        return
     while True:
         try:
             generated = run_once()
