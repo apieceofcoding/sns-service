@@ -70,15 +70,12 @@ def compare(batch: dict[str, torch.Tensor], models: dict[str, Ranker]) -> dict[s
         "latest": ndcg(-batch["candidate_age"], batch),
         "embedding": ndcg(embedding_scores(batch), batch),
     }
-    for name, model in models.items():
-        report[name] = ndcg(score(model, batch), batch)
-    return report
+    return report | {name: ndcg(score(model, batch), batch) for name, model in models.items()}
 
 
 def prepare() -> tuple[list[dict], dict[int, dict]]:
     sessions = build_sessions(load_events())
-    ids = {p for s in sessions for p in s["candidates"]}
-    ids |= {h[0] for s in sessions for h in s["history"]}
+    ids = {p for s in sessions for p in s["candidates"] + [h[0] for h in s["history"]]}
     return sessions, post_features(ids)
 
 
