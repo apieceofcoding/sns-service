@@ -1,11 +1,12 @@
 import base64
 import json
-import time
 from uuid import uuid4
 
 from redis import Redis
 
+from . import source
 from .config import settings
+from .events import excluded_ids
 
 WANTED = "recommend:wanted"
 PUBLISH = """
@@ -23,28 +24,18 @@ def redis_client():
     )
 
 
-def publish(
-    user_id,
-    ids,
-    strategy,
-    generation,
-    snapshot_id=None,
-    created_at=None,
-    model_version=None,
-    experiment=None,
-    arm=None,
-):
-    snapshot_id = snapshot_id or uuid4().hex
+def publish(user_id, ids, strategy, created_at, model_version=None, experiment=None, arm=None):
+    snapshot_id = uuid4().hex
+    generation = int(created_at * 1_000_000)
     payload = {
         "snapshot_id": snapshot_id,
-        "user_id": user_id,
         "ids": ids,
         "strategy": strategy,
         "model_version": model_version,
         "experiment": experiment,
         "arm": arm,
         "generation": generation,
-        "created_at": created_at or time.time(),
+        "created_at": created_at,
     }
     encoded = json.dumps(payload, sort_keys=True)
     keys = (f"recommend:feed:{user_id}:{snapshot_id}", f"recommend:current:{user_id}")
@@ -72,7 +63,7 @@ def cursor_decode(cursor, user_id):
         raise ValueError("invalid cursor") from exc
 
 
-def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
+def read_feed(user_id, limit=20, cursor=None):
     r = redis_client()
     raw = None
     if cursor:
@@ -84,12 +75,10 @@ def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
         r.sadd(WANTED, user_id)
         return {"ready": False, "post_ids": [], "next_cursor": None}
     data = json.loads(raw)
-    excluded = excluded or set()
     ids = data["ids"]
     selected, positions, end = [], [], min(len(ids), offset + limit * 5)
-    if alive is not None:
-        window = ids[offset:end]
-        excluded = excluded | (set(window) - alive(window))
+    window = ids[offset:end]
+    excluded = excluded_ids(user_id) | (set(window) - source.alive_ids(window))
     while offset < end and len(selected) < limit:
         post_id = ids[offset]
         offset += 1
@@ -103,10 +92,8 @@ def read_feed(user_id, limit=20, cursor=None, excluded=None, alive=None):
         "positions": positions,
         "snapshot_id": data["snapshot_id"],
         "strategy": data["strategy"],
-        "model_version": data.get("model_version"),
-        "experiment": data.get("experiment"),
-        "arm": data.get("arm"),
-        "created_at": data["created_at"],
-        "stale": time.time() - data["created_at"] >= settings().refresh_seconds,
+        "model_version": data["model_version"],
+        "experiment": data["experiment"],
+        "arm": data["arm"],
         "next_cursor": cursor_encode(user_id, data["snapshot_id"], offset) if more else None,
     }

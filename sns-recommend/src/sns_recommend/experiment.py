@@ -4,10 +4,9 @@ import hashlib
 from datetime import UTC, datetime
 from random import Random
 
-from . import simulator, source
+from . import simulator
 from .db import connection
 from .event_worker import drain
-from .events import excluded_ids
 from .feed import read_feed
 from .measurement import record_served
 from .registry import active, newest_candidate, promote, reject, version_row
@@ -69,9 +68,7 @@ def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
                 generate(user_id)
             except (LookupError, RuntimeError):
                 continue
-            feed = read_feed(
-                user_id, simulator.SHOWN, excluded=excluded_ids(user_id), alive=source.alive_ids
-            )
+            feed = read_feed(user_id, simulator.SHOWN)
             record_served(user_id, feed)
             moods[user_id] = simulator.drift(rnd, tastes[user_id], moods[user_id])
             shown = [posts[i] for i in feed["post_ids"] if i in posts]

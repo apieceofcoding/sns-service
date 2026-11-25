@@ -19,20 +19,12 @@ def generate(user_id: int) -> dict:
         user_id,
         ranked["ids"],
         ranked["strategy"],
-        int(started * 1_000_000),
-        created_at=started,
-        model_version=ranked.get("model_version"),
-        experiment=ranked.get("experiment"),
-        arm=ranked.get("arm"),
+        started,
+        ranked.get("model_version"),
+        ranked.get("experiment"),
+        ranked.get("arm"),
     )
-    return {
-        "user_id": user_id,
-        "strategy": ranked["strategy"],
-        "model_version": ranked.get("model_version"),
-        "arm": ranked.get("arm"),
-        "post_ids": ranked["ids"],
-        "published": published,
-    }
+    return {"user_id": user_id, **ranked, "published": published}
 
 
 def order(user_id: int, candidates: list[dict]) -> dict:

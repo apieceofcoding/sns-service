@@ -3,18 +3,11 @@ import logging
 import psycopg
 from fastapi import FastAPI, HTTPException, Query
 
-from . import source
-from .events import excluded_ids
 from .feed import read_feed
 from .measurement import metrics, record_served
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
 logger = logging.getLogger(__name__)
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
 
 
 @app.get("/metrics")
@@ -29,7 +22,7 @@ def feed(
     cursor: str | None = Query(None, max_length=512),
 ):
     try:
-        result = read_feed(user_id, limit, cursor, excluded_ids(user_id), alive=source.alive_ids)
+        result = read_feed(user_id, limit, cursor)
         try:
             record_served(user_id, result)
         except psycopg.Error as exc:

@@ -10,7 +10,7 @@ def candidates(*authors):
 def test_without_a_model_retrieval_order_is_kept(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ranking, "serving_model", lambda version: (None, None))
     result = ranking.rank(7, candidates(1, 2, 3))
-    assert result == {"ids": [1, 2, 3], "scores": None, "strategy": "embedding"}
+    assert result == {"ids": [1, 2, 3], "strategy": "embedding", "model_version": None}
 
 
 def test_without_post_features_the_model_is_not_claimed(monkeypatch: pytest.MonkeyPatch):
