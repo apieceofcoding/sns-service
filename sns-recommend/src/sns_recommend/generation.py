@@ -14,17 +14,6 @@ def generate(user_id: int) -> dict:
     ranked = rank(user_id, candidates)
     ranked["ids"] = diversify(candidates, ranked["ids"])
     published = publish(
-        user_id,
-        ranked["ids"],
-        ranked["strategy"],
-        int(started * 1_000_000),
-        created_at=started,
-        model_version=ranked.get("model_version"),
+        user_id, ranked["ids"], ranked["strategy"], started, ranked["model_version"]
     )
-    return {
-        "user_id": user_id,
-        "strategy": ranked["strategy"],
-        "model_version": ranked.get("model_version"),
-        "post_ids": ranked["ids"],
-        "published": published,
-    }
+    return {"user_id": user_id, **ranked, "published": published}

@@ -22,13 +22,14 @@ def recent_history(user_id: int) -> list[tuple[int, str, datetime]]:
 def rank(user_id: int, candidates: list[dict]) -> dict:
     retrieval_order = [c["id"] for c in candidates]
     model, version = serving_model()
+    fallback = {"ids": retrieval_order, "strategy": "embedding", "model_version": None}
     if model is None or not candidates:
-        return {"ids": retrieval_order, "scores": None, "strategy": "embedding"}
+        return fallback
     history = recent_history(user_id)
     features = post_features(retrieval_order + [h[0] for h in history])
     scored = [i for i in retrieval_order if i in features]
     if not scored:
-        return {"ids": retrieval_order, "scores": None, "strategy": "embedding"}
+        return fallback
     session = {
         "start": datetime.now(UTC),
         "history": history,
@@ -38,7 +39,7 @@ def rank(user_id: int, candidates: list[dict]) -> dict:
     values = score(model, encode([session], features))[0][: len(scored)].tolist()
     scores = dict(zip(scored, values, strict=True))
     ids = sorted(scored, key=lambda i: -scores[i]) + [i for i in retrieval_order if i not in scores]
-    return {"ids": ids, "scores": scores, "strategy": "model", "model_version": version}
+    return {"ids": ids, "strategy": "model", "model_version": version}
 
 
 def diversify(candidates: list[dict], ids: list[int], decay: float = 0.7) -> list[int]:

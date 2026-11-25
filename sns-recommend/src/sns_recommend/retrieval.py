@@ -8,8 +8,6 @@ from .profiles import build_user_vector
 
 
 def retrieve_candidates(user_id, k=30, as_of=None, *, user_vector=None):
-    if not source.user_exists(user_id):
-        raise LookupError("unknown user")
     return merge_candidates(candidate_pool(user_id, as_of or datetime.now(UTC), user_vector), k)
 
 
