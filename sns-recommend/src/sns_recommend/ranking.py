@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from datetime import UTC, datetime
 
 from .dataset import HISTORY, LABELS, POSITIVE, encode, history_before, post_features
@@ -37,8 +36,6 @@ def rank(user_id: int, candidates: list[dict]) -> dict:
         "labels": [[0.0] * len(LABELS)] * len(scored),
     }
     values = score(model, encode([session], features))[0][: len(scored)].tolist()
-    if not all(math.isfinite(v) for v in values):
-        return {"ids": retrieval_order, "scores": None, "strategy": "embedding_fallback"}
     scores = dict(zip(scored, values, strict=True))
     ids = sorted(scored, key=lambda i: -scores[i]) + [i for i in retrieval_order if i not in scores]
     return {"ids": ids, "scores": scores, "strategy": "model", "model_version": version}
