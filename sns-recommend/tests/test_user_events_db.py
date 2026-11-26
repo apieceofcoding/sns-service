@@ -5,7 +5,6 @@ from uuid import uuid4
 import pytest
 
 from sns_recommend import (
-    dataset,
     event_worker,
     events,
     experiment,
@@ -52,7 +51,6 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
     monkeypatch.setattr(seed, "POSTS", POSTS)
     seed.seed()
-    monkeypatch.setattr(generation.settings(), "explore_rate", 0.0)
 
 
 def add_like(post_id: int = 1) -> int:
@@ -303,8 +301,6 @@ def test_experiment_serves_each_group_its_model_and_promotes_the_winner(
         and row["model_version"] == models[row["arm"]]
         for row in served
     )
-    flags = {e["ranked"] for e in dataset.load_events() if e["action"] == "impression"}
-    assert flags == {True, False}
     monkeypatch.setattr(experiment, "verdict", lambda *args: "treatment wins")
     assert experiment.stop()["active_model"] == second["version"]
     assert generation.generate(READER)["model_version"] == second["version"]

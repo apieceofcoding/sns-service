@@ -47,12 +47,6 @@ def test_impressions_wait_until_their_label_window_closes():
     assert session["candidates"] == [2]
 
 
-def test_a_visit_is_ranked_when_a_ranking_chose_its_posts():
-    events = [event(2, "impression", 0), {**event(3, "impression", 10), "ranked": True}]
-    free, ranked = build_sessions(events)
-    assert (free["ranked"], ranked["ranked"]) == (False, True)
-
-
 def test_encoding_keeps_the_latest_action_last_and_pads_the_rest():
     features = {i: {"vector": [float(i), 1.0], "created_at": T0} for i in (1, 2, 3)}
     session = {

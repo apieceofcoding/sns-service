@@ -23,7 +23,7 @@ def test_the_same_gap_convinces_only_when_most_readers_show_it() -> None:
 def test_verdict_waits_for_the_planned_size_and_guards_the_like_rate() -> None:
     arms = {"control": {"like_rate": 0.10}, "treatment": {"like_rate": 0.10}}
     better = {"lift": 0.1, "p_value": 0.01}
-    assert verdict(arms, better, ready=False).startswith("wait")
+    assert verdict(arms, better, ready=False).startswith("inconclusive")
     assert verdict(arms, better, ready=True) == "treatment wins"
     assert verdict(arms, {"lift": 0.1, "p_value": 0.2}, ready=True) == "no clear difference"
     assert verdict(arms, {"lift": -0.1, "p_value": 0.01}, ready=True) == "control wins"
@@ -31,36 +31,15 @@ def test_verdict_waits_for_the_planned_size_and_guards_the_like_rate() -> None:
     assert verdict(arms, better, ready=True).startswith("control wins: treatment lowers")
 
 
-def candidates() -> list[dict]:
-    return [{"id": i, "author_id": 1} for i in (1, 2, 3)]
-
-
-def patch(monkeypatch: pytest.MonkeyPatch, explore_rate: float, group: dict | None) -> None:
-    monkeypatch.setattr(generation.settings(), "explore_rate", explore_rate)
-    monkeypatch.setattr(generation, "assigned", lambda user_id: group)
+def test_each_group_gets_its_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    group = {"experiment": "x", "arm": "treatment", "model": 2}
+    monkeypatch.setattr(generation, "retrieve_candidates", lambda user, user_vector: [])
+    monkeypatch.setattr(generation, "build_user_vector", lambda user: None)
+    monkeypatch.setattr(generation, "assigned", lambda user: group)
     monkeypatch.setattr(
-        generation, "rank", lambda user, rows, version: {"ids": [3, 2, 1], "strategy": "model"}
+        generation, "rank", lambda user, rows, version: {"ids": [version], "strategy": "model"}
     )
-    monkeypatch.setattr(generation, "diversify", lambda rows, ids: ["spread", *ids])
-
-
-def test_explore_feed_is_shuffled_and_belongs_to_no_group(monkeypatch) -> None:
-    patch(monkeypatch, 1.0, {"experiment": "x", "arm": "control", "model": 1})
-    result = generation.order(7, candidates())
-    assert result["strategy"] == "explore" and sorted(result["ids"]) == [1, 2, 3]
-    assert "arm" not in result
-
-
-def test_each_group_gets_its_model(monkeypatch) -> None:
-    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "treatment", "model": 2})
-    assert generation.order(7, candidates()) == {
-        "ids": ["spread", 3, 2, 1],
-        "strategy": "model",
-        "experiment": "x",
-        "arm": "treatment",
-    }
-    patch(monkeypatch, 0.0, {"experiment": "x", "arm": "control", "model": None})
-    result = generation.order(7, candidates())
-    assert (result["ids"], result["strategy"]) == (["spread", 1, 2, 3], "embedding")
-    patch(monkeypatch, 0.0, None)
-    assert generation.order(7, candidates())["ids"] == ["spread", 3, 2, 1]
+    monkeypatch.setattr(generation, "diversify", lambda rows, ids: ids)
+    monkeypatch.setattr(generation, "publish", lambda user, **feed: feed)
+    published = generation.generate(7)["published"]
+    assert (published["ids"], published["experiment"], published["arm"]) == ([2], "x", "treatment")

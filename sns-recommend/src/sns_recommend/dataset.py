@@ -21,12 +21,9 @@ LABELS = ("click", "like")
 def load_events() -> list[dict]:
     with connection() as conn:
         return conn.execute(
-            """SELECT e.user_id,e.post_id,e.action,e.occurred_at,
-            coalesce(s.strategy<>'explore',false) AS ranked
-            FROM user_events e LEFT JOIN served_posts s
-            ON e.action='impression' AND s.user_id=e.user_id AND s.post_id=e.post_id
-            WHERE e.action=ANY(%s) AND e.deleted_at IS NULL
-            ORDER BY e.user_id,e.occurred_at,e.post_id""",
+            """SELECT user_id,post_id,action,occurred_at FROM user_events
+            WHERE action=ANY(%s) AND deleted_at IS NULL
+            ORDER BY user_id,occurred_at,post_id""",
             (["impression", *POSITIVE],),
         ).fetchall()
 
@@ -58,10 +55,9 @@ def build_sessions(events: list[dict], now: datetime | None = None) -> list[dict
             if session is None or shown_at - session["last"] > SESSION_GAP:
                 history = history_before(rows, shown_at)
                 session = {"user_id": user_id, "start": shown_at, "history": history}
-                session["candidates"], session["labels"], session["ranked"] = [], [], False
+                session["candidates"], session["labels"] = [], []
                 sessions.append(session)
             session["last"] = shown_at
-            session["ranked"] |= row.get("ranked", False)
             if len(session["candidates"]) < CANDIDATES:
                 done = {
                     r["action"]

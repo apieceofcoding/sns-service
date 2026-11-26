@@ -58,7 +58,7 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
 def step() -> dict:
     current = experiment.running()
     if current:
-        ready = experiment.report(current["name"])["ready"]
+        ready = experiment.report()["ready"]
         return experiment.stop() if ready else {"experiment": current["name"], "ready": False}
     result = retrain()
     candidate = newest_candidate()
@@ -74,7 +74,7 @@ def monitor(hours: float = 1) -> dict:
         raise LookupError("no active model")
     sessions, features = prepare()
     since = datetime.now(UTC) - timedelta(hours=hours)
-    recent = [s for s in sessions if s["start"] >= since and not s["ranked"]]
+    recent = [s for s in sessions if s["start"] >= since]
     if not recent:
         return {"version": serving["id"], "recent_sessions": 0}
     model = load(Path(serving["path"]))[0]

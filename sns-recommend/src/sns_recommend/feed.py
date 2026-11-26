@@ -76,7 +76,7 @@ def read_feed(user_id, limit=20, cursor=None):
         return {"ready": False, "post_ids": [], "next_cursor": None}
     data = json.loads(raw)
     ids = data["ids"]
-    selected, positions, end = [], [], min(len(ids), offset + limit * 5)
+    selected, end = [], min(len(ids), offset + limit * 5)
     window = ids[offset:end]
     excluded = excluded_ids(user_id) | (set(window) - source.alive_ids(window))
     while offset < end and len(selected) < limit:
@@ -84,12 +84,10 @@ def read_feed(user_id, limit=20, cursor=None):
         offset += 1
         if post_id not in excluded:
             selected.append(post_id)
-            positions.append(offset - 1)
     more = offset < len(ids)
     return {
         "ready": True,
         "post_ids": selected,
-        "positions": positions,
         "snapshot_id": data["snapshot_id"],
         "strategy": data["strategy"],
         "model_version": data["model_version"],

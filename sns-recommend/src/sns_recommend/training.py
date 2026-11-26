@@ -15,7 +15,7 @@ from .model import Ranker, save, score
 
 def split(sessions: list[dict], valid_ratio: float = 0.25) -> tuple[list[dict], list[dict]]:
     cut = int(len(sessions) * (1 - valid_ratio))
-    return sessions[:cut], [s for s in sessions[cut:] if not s["ranked"]]
+    return sessions[:cut], sessions[cut:]
 
 
 def fit(

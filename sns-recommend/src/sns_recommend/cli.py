@@ -24,10 +24,9 @@ def main():
     commands.add_parser("train").add_argument("--epochs", type=int, default=40)
     commands.add_parser("monitor").add_argument("--hours", type=float, default=1)
     commands.add_parser("promote").add_argument("--version", type=int, required=True)
-    experiment = commands.add_parser("experiment", help="A/B test: serving model vs candidate")
+    experiment = commands.add_parser("experiment")
     experiment.add_argument("action", choices=["start", "run", "report", "stop"])
-    experiment.add_argument("--name", help="default: exp-<month day hour minute>")
-    experiment.add_argument("--min-impressions", type=int, default=3000, help="per group")
+    experiment.add_argument("--min-impressions", type=int, default=3000)
     experiment.add_argument("--rounds", type=int, default=3)
     experiment.add_argument("--users", type=int, default=300)
     args = parser.parse_args()
@@ -94,7 +93,7 @@ def run(args):
         from . import experiment
 
         if args.action == "start":
-            name = args.name or f"exp-{datetime.now(UTC):%m%d-%H%M}"
+            name = f"exp-{datetime.now(UTC):%m%d-%H%M}"
             return experiment.start(name, args.min_impressions)
         if args.action == "run":
             return experiment.simulate_feed(args.rounds, args.users)

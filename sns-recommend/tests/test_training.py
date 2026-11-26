@@ -31,7 +31,6 @@ def synthetic_sessions(n=400, seed=1):
                 "history": history,
                 "candidates": candidates,
                 "labels": labels,
-                "ranked": False,
             }
         )
     return sessions, features
@@ -44,14 +43,6 @@ def test_the_model_learns_what_the_mean_vector_misses():
     model = fit(encode(train, features), epochs=20, batch_size=16)
     report = compare(encode(valid, features), {"model": model})
     assert report["model"] > report["embedding"] + 0.05
-
-
-def test_ranked_visits_are_not_used_for_checking():
-    sessions, _ = synthetic_sessions(n=40)
-    for session in sessions[-5:]:
-        session["ranked"] = True
-    train, valid = split(sessions)
-    assert (len(train), len(valid)) == (30, 5)
 
 
 def test_gate_promotes_only_a_clear_improvement():

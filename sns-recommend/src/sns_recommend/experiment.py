@@ -9,7 +9,7 @@ from .db import connection
 from .event_worker import drain
 from .feed import read_feed
 from .measurement import record_served
-from .registry import active, newest_candidate, promote, reject, version_row
+from .registry import active, newest_candidate, promote, reject
 
 ARMS = ("control", "treatment")
 NEW_POSTS = 12
@@ -37,14 +37,14 @@ def assigned(user_id: int) -> dict | None:
 def start(name: str, min_impressions: int = 3000) -> dict:
     if running():
         raise ValueError("another experiment is running")
-    serving, candidate = active(), newest_candidate()
+    candidate = newest_candidate()
     if candidate is None:
         raise ValueError("nothing to compare: train a candidate first")
     with connection() as conn:
         return conn.execute(
             """INSERT INTO experiments(name,control_model,treatment_model,min_impressions)
             VALUES (%s,%s,%s,%s) RETURNING *""",
-            (name, serving["id"] if serving else None, candidate["id"], min_impressions),
+            (name, (active() or {}).get("id"), candidate["id"], min_impressions),
         ).fetchone()
 
 
@@ -54,71 +54,58 @@ def simulate_feed(rounds: int = 3, users: int = 300) -> dict:
     if running() is None:
         raise LookupError("start an experiment first")
     rnd = Random(f"feed:{datetime.now(UTC):%Y%m%d%H%M}")
-    reader_ids = simulator.readers(users)
-    hourly_cost = simulator.age_cost()
-    tastes = {u: simulator.taste(u) for u in reader_ids}
+    tastes = {u: simulator.taste(u) for u in simulator.readers(users)}
     moods = {u: max(t, key=t.get) for u, t in tastes.items()}
+    cost = simulator.age_cost()
     for _ in range(rounds):
         simulator.publish_posts(NEW_POSTS)
         drain()
         posts = {p["id"]: p for p in simulator.visible_posts()}
         rows: tuple[list, list, list] = ([], [], [])
-        for user_id in reader_ids:
+        for user_id, taste in tastes.items():
             try:
                 generate(user_id)
             except (LookupError, RuntimeError):
                 continue
             feed = read_feed(user_id, simulator.SHOWN)
             record_served(user_id, feed)
-            moods[user_id] = simulator.drift(rnd, tastes[user_id], moods[user_id])
+            moods[user_id] = simulator.drift(rnd, taste, moods[user_id])
             shown = [posts[i] for i in feed["post_ids"] if i in posts]
-            simulator.visit(
-                rnd,
-                user_id,
-                shown,
-                datetime.now(UTC),
-                tastes[user_id],
-                moods[user_id],
-                hourly_cost,
-                rows,
-            )
+            now = datetime.now(UTC)
+            simulator.visit(rnd, user_id, shown, now, taste, moods[user_id], cost, rows)
         simulator.write(*rows)
     drain()
     return {"rounds": rounds, **report()}
 
 
 def compare_readers(control: list[tuple[int, int]], treatment: list[tuple[int, int]]) -> dict:
-    def gap(groups: list[int]) -> float:
-        clicks, shown = [0, 0], [0, 0]
-        for (c, n), g in zip(readers, groups, strict=True):
-            clicks[g] += c
-            shown[g] += n
-        return clicks[1] / shown[1] - clicks[0] / shown[0] if shown[0] and shown[1] else 0.0
-
     readers = control + treatment
     labels = [0] * len(control) + [1] * len(treatment)
-    shown = [sum(n for _, n in group) for group in (control, treatment)]
-    if not all(shown):
+
+    def gap() -> float:
+        clicks, shown = [0, 0], [0, 0]
+        for (c, n), g in zip(readers, labels, strict=True):
+            clicks[g] += c
+            shown[g] += n
+        return clicks[1] / shown[1] - clicks[0] / shown[0]
+
+    base_shown = sum(n for _, n in control)
+    if not base_shown or not sum(n for _, n in treatment):
         return {"lift": None, "p_value": None}
-    observed = gap(labels)
-    rnd, trials, extreme = Random(0), 2000, 0
+    observed, rnd, trials, extreme = gap(), Random(0), 2000, 0
     for _ in range(trials):
         rnd.shuffle(labels)
-        extreme += abs(gap(labels)) >= abs(observed)
-    base = sum(c for c, _ in control) / shown[0]
+        extreme += abs(gap()) >= abs(observed)
+    base = sum(c for c, _ in control) / base_shown
     return {
         "lift": round(observed / base, 3) if base else None,
         "p_value": round((extreme + 1) / (trials + 1), 4),
     }
 
 
-def report(name: str | None = None) -> dict:
+def report() -> dict:
     with connection() as conn:
-        exp = conn.execute(
-            """SELECT * FROM experiments WHERE %s::text IS NULL OR name=%s
-            ORDER BY started_at DESC LIMIT 1""",
-            (name, name),
-        ).fetchone()
+        exp = conn.execute("SELECT * FROM experiments ORDER BY started_at DESC LIMIT 1").fetchone()
         if exp is None:
             raise LookupError("no experiment")
         rows = conn.execute(
@@ -127,13 +114,13 @@ def report(name: str | None = None) -> dict:
             count(*) FILTER (WHERE e.action='like') AS likes
             FROM served_posts s JOIN user_events e ON e.user_id=s.user_id AND e.post_id=s.post_id
             AND e.action IN ('impression','click','like') AND e.deleted_at IS NULL
-            WHERE s.experiment=%s GROUP BY s.arm,s.user_id""",
+            WHERE s.experiment=%s GROUP BY s.arm,s.user_id HAVING count(*) FILTER
+            (WHERE e.action='impression')>0""",
             (exp["name"],),
         ).fetchall()
-    arms = {}
-    readers = {}
+    arms, readers = {}, {}
     for group in ARMS:
-        mine = [r for r in rows if r["arm"] == group and r["shown"]]
+        mine = [r for r in rows if r["arm"] == group]
         shown = sum(r["shown"] for r in mine)
         readers[group] = [(r["clicks"], r["shown"]) for r in mine]
         arms[group] = {
@@ -156,7 +143,7 @@ def report(name: str | None = None) -> dict:
 
 def verdict(arms: dict, clicks: dict, ready: bool) -> str:
     if not ready or clicks["p_value"] is None:
-        return "wait: planned impressions not reached"
+        return "inconclusive: planned impressions not reached"
     if clicks["p_value"] >= 0.05:
         return "no clear difference"
     if clicks["lift"] < 0:
@@ -170,17 +157,15 @@ def stop() -> dict:
     current = running()
     if current is None:
         raise LookupError("no running experiment")
-    result = report(current["name"])
-    decision = result["verdict"].replace("wait", "inconclusive")
-    candidate = version_row(current["treatment_model"]) if current["treatment_model"] else None
-    if candidate and candidate["status"] == "candidate" and not decision.startswith("inconclusive"):
-        if decision == "treatment wins":
-            promote(candidate["id"])
-        else:
-            reject(candidate["id"])
+    result = report()
+    decision = result["verdict"]
+    if decision == "treatment wins":
+        promote(current["treatment_model"])
+    elif not decision.startswith("inconclusive"):
+        reject(current["treatment_model"])
     with connection() as conn:
         conn.execute(
             "UPDATE experiments SET stopped_at=now(),decision=%s WHERE name=%s",
             (decision, current["name"]),
         )
-    return {**result, "verdict": decision, "active_model": (active() or {}).get("id")}
+    return {**result, "active_model": (active() or {}).get("id")}
