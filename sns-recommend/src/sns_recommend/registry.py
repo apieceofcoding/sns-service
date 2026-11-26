@@ -28,8 +28,8 @@ def experiment_id(c: MlflowClient) -> str:
 
 def log_run(path: str, report: dict, outcome: str) -> str:
     c = client()
-    tags = {k: report[k] for k in ("data_until", "trained_until", "embedding_model")}
-    run_id = c.create_run(experiment_id(c), tags={**tags, "outcome": outcome}).info.run_id
+    tags = {"data_until": report["data_until"], "outcome": outcome}
+    run_id = c.create_run(experiment_id(c), tags=tags).info.run_id
     for name, value in report["ndcg@10"].items():
         if value is not None:
             c.log_metric(run_id, f"ndcg_{name}", value)
@@ -81,7 +81,7 @@ def active() -> dict | None:
 
 def model_file(version: dict) -> Path:
     folder = Path(settings().model_dir) / "mlflow" / version["run_id"]
-    if not folder.exists():
+    if not any(folder.rglob("*.pt")):
         download_artifacts(
             artifact_uri=version["source"],
             dst_path=str(folder),
@@ -104,7 +104,7 @@ def promote(version: int) -> dict:
 
 
 def rollback() -> dict:
-    retired = [v for v in versions(1000) if v["status"] == "retired" and v["activated_at"]]
+    retired = [v for v in all_versions() if v["status"] == "retired" and v["activated_at"]]
     if not retired:
         raise LookupError("no earlier version to roll back to")
     current = active()
@@ -115,9 +115,13 @@ def rollback() -> dict:
     return promote(max(retired, key=lambda v: v["activated_at"])["id"])
 
 
+def all_versions() -> list[dict]:
+    found = client().search_model_versions(f"name='{settings().mlflow_model}'")
+    return sorted((row(v) for v in found), key=lambda v: -v["id"])
+
+
 def versions(limit: int = 10) -> list[dict]:
-    name = settings().mlflow_model
-    found = client().search_model_versions(f"name='{name}'")
-    rows = sorted((row(v) for v in found), key=lambda v: -v["id"])[:limit]
     keys = ("id", "status", "trained_until", "activated_at")
-    return [{**{k: v[k] for k in keys}, "ndcg": v["metrics"]["ndcg@10"]} for v in rows]
+    return [
+        {**{k: v[k] for k in keys}, "ndcg": v["metrics"]["ndcg@10"]} for v in all_versions()[:limit]
+    ]
