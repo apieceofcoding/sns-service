@@ -5,6 +5,7 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from . import experiment
 from .config import settings
@@ -42,11 +43,12 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
     baselines = {}
     if serving and serving["embedding_model"] == embedding_model():
         baselines["active"] = load(model_file(serving))[0]
-    path = Path(settings().model_dir) / f"ranker-{datetime.now(UTC):%Y%m%d%H%M%S}.pt"
-    report = train(epochs, path, baselines)
-    report["data_until"] = sessions[-1]["start"].isoformat()
-    accepted, reason = gate(report["ndcg@10"])
-    run_id = log_run(str(path), report, "accepted" if accepted else "rejected")
+    with TemporaryDirectory() as folder:
+        path = Path(folder) / "ranker.pt"
+        report = train(epochs, path, baselines)
+        report["data_until"] = sessions[-1]["start"].isoformat()
+        accepted, reason = gate(report["ndcg@10"])
+        run_id = log_run(str(path), report, "accepted" if accepted else "rejected")
     result = {"trained": True, "run": run_id, "promoted": False, "reason": reason, **report}
     if not accepted:
         return result
