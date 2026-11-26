@@ -10,7 +10,7 @@ from .config import settings
 from .dataset import encode
 from .embeddings import embedding_model
 from .model import load
-from .registry import active, latest, promote, register
+from .registry import active, last_run, log_run, model_file, promote, register
 from .training import compare, prepare, train
 
 logger = logging.getLogger(__name__)
@@ -29,24 +29,26 @@ def gate(ndcg: dict) -> tuple[bool, str]:
 
 def retrain(force: bool = False, epochs: int = 40) -> dict:
     sessions = prepare()[0]
-    last = latest()
+    last = last_run()
     if last and not force:
-        seen = datetime.fromisoformat(last["metrics"]["data_until"])
+        seen = datetime.fromisoformat(last["data_until"])
         new = sum(s["start"] > seen for s in sessions)
         if new < settings().retrain_min_sessions:
             return {"trained": False, "new_sessions": new}
     serving = active()
     baselines = {}
     if serving and serving["embedding_model"] == embedding_model():
-        baselines["active"] = load(Path(serving["path"]))[0]
+        baselines["active"] = load(model_file(serving))[0]
     path = Path(settings().model_dir) / f"ranker-{datetime.now(UTC):%Y%m%d%H%M%S}.pt"
     report = train(epochs, path, baselines)
     report["data_until"] = sessions[-1]["start"].isoformat()
     accepted, reason = gate(report["ndcg@10"])
-    version = register(str(path), report, "candidate" if accepted else "rejected")
+    run_id = log_run(str(path), report, "accepted" if accepted else "rejected")
+    result = {"trained": True, "run": run_id, "promoted": accepted, "reason": reason, **report}
     if accepted:
-        promote(version)
-    return {"trained": True, "version": version, "promoted": accepted, "reason": reason, **report}
+        result["version"] = register(run_id, report)
+        promote(result["version"])
+    return result
 
 
 def monitor(hours: float = 1) -> dict:
@@ -58,7 +60,7 @@ def monitor(hours: float = 1) -> dict:
     recent = [s for s in sessions if s["start"] >= since]
     if not recent:
         return {"version": serving["id"], "recent_sessions": 0}
-    model = load(Path(serving["path"]))[0]
+    model = load(model_file(serving))[0]
     return {
         "version": serving["id"],
         "at_training": serving["metrics"]["ndcg@10"],

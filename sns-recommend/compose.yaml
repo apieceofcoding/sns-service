@@ -21,5 +21,14 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.17.2
+    command: >-
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts --serve-artifacts
+    ports: ["127.0.0.1:55000:5000"]
+    volumes: ["recommend-mlflow:/mlflow"]
 volumes:
   recommend-index-pg18:
+  recommend-mlflow:

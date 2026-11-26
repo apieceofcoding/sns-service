@@ -41,9 +41,8 @@ def rows(action: str, user_id: int = READER) -> list[dict]:
 def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
-        conn.execute(
-            "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,model_versions"
-        )
+        conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,simulation")
+    monkeypatch.setattr(registry.settings(), "mlflow_model", f"ranker-{uuid4().hex[:8]}")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
@@ -256,6 +255,7 @@ def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) 
     event_worker.drain()
     result = trainer.retrain(force=True, epochs=2)
     assert result["promoted"] is True and registry.active()["id"] == result["version"]
+    assert registry.last_run()["outcome"] == "accepted"
     assert trainer.retrain()["trained"] is False
     served = generation.generate(READER)
     assert served["strategy"] == "model" and served["model_version"] == result["version"]
@@ -264,3 +264,13 @@ def test_trained_model_is_registered_promoted_and_served(tmp_path, monkeypatch) 
     assert registry.rollback() == {"active": result["version"]}
     with pytest.raises(LookupError):
         registry.rollback()
+
+
+def test_rejected_model_is_logged_but_not_registered(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
+    monkeypatch.setattr(trainer, "gate", lambda ndcg: (False, "rejected in this test"))
+    simulator.simulate(users=40, sessions=6, hours=3)
+    event_worker.drain()
+    result = trainer.retrain(force=True, epochs=2)
+    assert result["promoted"] is False and "version" not in result
+    assert registry.last_run()["outcome"] == "rejected" and registry.versions() == []
