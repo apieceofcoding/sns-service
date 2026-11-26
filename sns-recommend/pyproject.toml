@@ -13,7 +13,7 @@ dependencies = [
     "uvicorn>=0.34,<1",
     "numpy>=2,<3",
     "torch>=2.6,<3",
-    "mlflow-skinny>=3.17.2,<4",
+    "mlflow>=3.17.2,<4",
 ]
 
 [dependency-groups]

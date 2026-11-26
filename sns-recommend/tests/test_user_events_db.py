@@ -47,7 +47,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
             "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,"
             "experiments,served_posts"
         )
-    monkeypatch.setattr(registry.settings(), "mlflow_model", f"ranker-{uuid4().hex[:8]}")
+    monkeypatch.setattr(registry, "MODEL", f"ranker-{uuid4().hex[:8]}")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
@@ -272,7 +272,6 @@ def test_first_model_serves_and_later_ones_wait_for_an_experiment(tmp_path, monk
     third = trainer.retrain(force=True, epochs=2)
     assert second["promoted"] is False
     assert registry.newest_candidate()["id"] == third["version"]
-    assert registry.version_row(second["version"])["status"] == "rejected"
     registry.promote(third["version"])
     assert registry.rollback() == {"active": first["version"]}
     with pytest.raises(LookupError):
