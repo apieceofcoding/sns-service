@@ -114,9 +114,10 @@ def report() -> dict:
             count(*) FILTER (WHERE e.action='like') AS likes
             FROM served_posts s JOIN user_events e ON e.user_id=s.user_id AND e.post_id=s.post_id
             AND e.action IN ('impression','click','like') AND e.deleted_at IS NULL
+            AND e.occurred_at>=%s
             WHERE s.experiment=%s GROUP BY s.arm,s.user_id HAVING count(*) FILTER
             (WHERE e.action='impression')>0""",
-            (exp["name"],),
+            (exp["started_at"], exp["name"]),
         ).fetchall()
     arms, readers = {}, {}
     for group in ARMS:

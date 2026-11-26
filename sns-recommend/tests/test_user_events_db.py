@@ -11,6 +11,7 @@ from sns_recommend import (
     feed,
     generation,
     indexing,
+    measurement,
     profiles,
     ranking,
     registry,
@@ -330,3 +331,18 @@ def test_rejected_model_is_logged_but_not_registered(tmp_path, monkeypatch) -> N
     result = trainer.retrain(force=True, epochs=2)
     assert result["promoted"] is False and "version" not in result
     assert registry.last_run()["outcome"] == "rejected" and registry.versions() == []
+
+
+def test_report_counts_only_reactions_after_the_start(tmp_path, monkeypatch) -> None:
+    trained(tmp_path, monkeypatch, users=20)
+    trainer.retrain(force=True, epochs=2)
+    experiment.start("ab-time", min_impressions=1)
+    with connection() as conn:
+        conn.execute(
+            """INSERT INTO user_events(user_id,post_id,action,occurred_at)
+            VALUES (%s,1,'impression',now()-interval '1 day')""",
+            (READER,),
+        )
+    feed = {"post_ids": [1], "strategy": "model", "model_version": None}
+    measurement.record_served(READER, feed | {"experiment": "ab-time", "arm": "control"})
+    assert experiment.report()["arms"]["control"]["impressions"] == 0
