@@ -142,9 +142,11 @@ uv run sns-recommend-worker
 
 ```sh
 git switch part-5-mlops
+# MLflow 서버 추가. 학습 기록은 http://localhost:55000
+docker compose up -d
 uv sync
 uv run sns-recommend init
-# 학습, 기준 검사, 통과하면 등록 후 교체
+# 학습을 MLflow run으로 기록, 기준을 통과하면 모델 버전으로 등록 후 교체
 uv run sns-recommend train
 # 독자 반응 방식 변화: 새 글에만 반응
 uv run sns-recommend simulate --shift --hours 1 --sessions 8
@@ -213,8 +215,9 @@ docker compose up -d  # part-2부터
 | 저장소                       | 내용                                                                   | 연결 설정             |
 | ---------------------------- | ---------------------------------------------------------------------- | --------------------- |
 | SNS DB (`snsdb`, 5432)       | 회원, 게시글, 좋아요 원본과 post_actions                               | `SOURCE_DATABASE_URL` |
-| 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터, 모델 버전, 생성 기록, 서빙 기록, 실험 | `DATABASE_URL`        |
+| 추천 DB (`recommend`, 55432) | user_events, 읽은 위치, 글 벡터, 생성 기록, 서빙 기록, 실험             | `DATABASE_URL`        |
 | Redis (56379)                | 완성된 추천 ID 목록                                                    | `REDIS_URL`           |
+| MLflow (55000, part-5부터)   | 학습 기록(run), 등록된 모델 버전, 모델 파일                            | `MLFLOW_TRACKING_URI` |
 | `sns-recommend/models/`      | 학습한 모델 파일                                                       | 기본 경로             |
 
 ## 모델 설정

@@ -43,9 +43,10 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
         conn.execute(
-            "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,model_versions,"
+            "TRUNCATE user_events,post_embeddings,user_event_cursors,simulation,"
             "experiments,served_posts"
         )
+    monkeypatch.setattr(registry.settings(), "mlflow_model", f"ranker-{uuid4().hex[:8]}")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")
@@ -262,6 +263,7 @@ def trained(tmp_path, monkeypatch, users: int = 40) -> dict:
 def test_first_model_serves_and_later_ones_wait_for_an_experiment(tmp_path, monkeypatch) -> None:
     first = trained(tmp_path, monkeypatch)
     assert first["promoted"] is True and registry.active()["id"] == first["version"]
+    assert registry.last_run()["outcome"] == "accepted"
     assert trainer.retrain()["trained"] is False
     served = generation.generate(READER)
     assert served["strategy"] == "model" and served["model_version"] == first["version"]
@@ -318,3 +320,13 @@ def test_pipeline_step_starts_an_experiment_for_a_new_candidate(tmp_path, monkey
     assert trainer.step()["verdict"].startswith("inconclusive")
     assert experiment.running() is None
     assert registry.newest_candidate()["id"] == candidate["version"]
+
+
+def test_rejected_model_is_logged_but_not_registered(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(trainer.settings(), "model_dir", str(tmp_path))
+    monkeypatch.setattr(trainer, "gate", lambda ndcg: (False, "rejected in this test"))
+    simulator.simulate(users=40, sessions=6, hours=3)
+    event_worker.drain()
+    result = trainer.retrain(force=True, epochs=2)
+    assert result["promoted"] is False and "version" not in result
+    assert registry.last_run()["outcome"] == "rejected" and registry.versions() == []
