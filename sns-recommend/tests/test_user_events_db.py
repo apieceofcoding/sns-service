@@ -42,7 +42,7 @@ def clean(monkeypatch: pytest.MonkeyPatch) -> None:
     initialize()
     with connection() as conn:
         conn.execute("TRUNCATE user_events,post_embeddings,user_event_cursors,simulation")
-    monkeypatch.setattr(registry.settings(), "mlflow_model", f"ranker-{uuid4().hex[:8]}")
+    monkeypatch.setattr(registry, "MODEL", f"ranker-{uuid4().hex[:8]}")
     with source_connection() as conn:
         conn.execute("TRUNCATE post_actions,likes,posts,users RESTART IDENTITY")
     feed.redis_client().delete(feed.WANTED, f"recommend:current:{READER}")

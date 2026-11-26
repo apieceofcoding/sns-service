@@ -10,8 +10,7 @@ from tempfile import TemporaryDirectory
 from .config import settings
 from .dataset import encode
 from .embeddings import embedding_model
-from .model import load
-from .registry import active, last_run, log_run, model_file, promote, register
+from .registry import active, last_run, log_run, model, promote
 from .training import compare, prepare, train
 
 logger = logging.getLogger(__name__)
@@ -39,17 +38,17 @@ def retrain(force: bool = False, epochs: int = 40) -> dict:
     serving = active()
     baselines = {}
     if serving and serving["embedding_model"] == embedding_model():
-        baselines["active"] = load(model_file(serving))[0]
+        baselines["active"] = model(serving)
     with TemporaryDirectory() as folder:
         path = Path(folder) / "ranker.pt"
         report = train(epochs, path, baselines)
         report["data_until"] = sessions[-1]["start"].isoformat()
         accepted, reason = gate(report["ndcg@10"])
-        run_id = log_run(str(path), report, "accepted" if accepted else "rejected")
+        run_id, version = log_run(path, report, accepted)
     result = {"trained": True, "run": run_id, "promoted": accepted, "reason": reason, **report}
     if accepted:
-        result["version"] = register(run_id, report)
-        promote(result["version"])
+        result["version"] = version
+        promote(version)
     return result
 
 
@@ -62,12 +61,11 @@ def monitor(hours: float = 1) -> dict:
     recent = [s for s in sessions if s["start"] >= since]
     if not recent:
         return {"version": serving["id"], "recent_sessions": 0}
-    model = load(model_file(serving))[0]
     return {
         "version": serving["id"],
-        "at_training": serving["metrics"]["ndcg@10"],
+        "at_training": serving["ndcg"],
         "recent_sessions": len(recent),
-        "recent": compare(encode(recent, features), {"active": model}),
+        "recent": compare(encode(recent, features), {"active": model(serving)}),
     }
 
 
