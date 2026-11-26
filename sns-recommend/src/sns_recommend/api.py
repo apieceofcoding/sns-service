@@ -4,15 +4,10 @@ import psycopg
 from fastapi import FastAPI, HTTPException, Query
 
 from .feed import read_feed
-from .measurement import metrics, record_served
+from .measurement import record_served
 
 app = FastAPI(title="SNS Recommend", version="0.1.0")
 logger = logging.getLogger(__name__)
-
-
-@app.get("/metrics")
-def measurements():
-    return metrics()
 
 
 @app.get("/internal/feeds/{user_id}")

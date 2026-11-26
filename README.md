@@ -170,8 +170,6 @@ uv run sns-recommend experiment start
 uv run sns-recommend experiment run --rounds 3
 # 판정. 후보가 이기면 교체
 uv run sns-recommend experiment stop
-# 운영 지표
-curl http://localhost:8001/metrics
 ```
 
 ## 종료
