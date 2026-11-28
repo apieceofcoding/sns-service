@@ -25,7 +25,7 @@ export default function SignupPage() {
       onSubmit={submit}
       footer={{ text: "이미 계정이 있으신가요?", link: "로그인하기", href: "/login" }}
     >
-      <AuthField label="사용자 이름" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+      <AuthField label="사용자 이름" name="username" type="text" autoComplete="off" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} />
       <AuthField label="비밀번호" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
       <AuthField label="비밀번호 확인" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
     </AuthForm>
